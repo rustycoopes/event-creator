@@ -3,7 +3,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.v1.storage_config import router as storage_config_router
+from app.api.v1.storage_dropbox import router as storage_dropbox_router
+from app.api.v1.storage_google_drive import router as storage_google_drive_router
+from app.api.v1.user_settings import router as user_settings_router
 from app.pages.dashboard import router as dashboard_router
+from app.pages.settings_fragments import router as settings_fragments_router
 
 
 @asynccontextmanager
@@ -19,6 +24,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Event Creator", lifespan=lifespan)
 
 app.include_router(dashboard_router)
+app.include_router(settings_fragments_router)
+app.include_router(storage_config_router)
+app.include_router(storage_google_drive_router)
+app.include_router(storage_dropbox_router)
+app.include_router(user_settings_router)
 
 
 @app.get("/health")
