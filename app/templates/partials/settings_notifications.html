@@ -1,0 +1,103 @@
+{#
+  Settings > Notifications panel fragment (Slice R7). Rendered standalone by
+  `GET /settings/event-creator/notifications` - see settings_storage.html's docstring for why this
+  fragment carries its own `x-data` root rather than a page-level Alpine root, and why the x-data
+  is single-quoted (the register.html quote-truncation bug, guarded by the ported regression
+  tests). notifications_data seeds the current toggle state + gating fields from the server.
+#}
+<div
+  id="notifications-tab-panel"
+  x-data='{
+    ...{{ notifications_data | tojson }},
+    saving: false,
+    error: "",
+    success: false,
+    async save() {
+      this.saving = true;
+      this.error = "";
+      this.success = false;
+      try {
+        const response = await fetch("/api/v1/user-settings", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            notification_email: this.notification_email,
+            notification_sms: this.notification_sms,
+          }),
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          this.error = data.detail || "Could not save changes. Please try again.";
+          return;
+        }
+        this.success = true;
+      } catch (e) {
+        this.error = "Could not save changes. Please try again.";
+      } finally {
+        this.saving = false;
+      }
+    },
+  }'
+>
+  <div role="alert" class="alert alert-success mt-2" x-show="success" x-cloak>
+    <span>Notification preferences saved.</span>
+  </div>
+  <div role="alert" class="alert alert-error mt-2" x-show="error" x-cloak>
+    <span x-text="error"></span>
+  </div>
+
+  <form class="flex flex-col gap-4" @submit.prevent="save">
+    <label class="form-control w-full">
+      <div class="label">
+        <span class="label-text">Email</span>
+        <span class="label-text-alt">
+          {% if notifications_data.email %}{{ notifications_data.email }}{% else %}Not set{% endif %}
+          — <a href="/profile" class="link">edit in Profile</a>
+        </span>
+      </div>
+    </label>
+    <label class="label cursor-pointer justify-start gap-3">
+      <input
+        type="checkbox"
+        id="notification_email"
+        x-model="notification_email"
+        {% if not notifications_data.email %}disabled{% endif %}
+        class="toggle toggle-primary"
+      />
+      <span class="label-text">Email notifications</span>
+    </label>
+    {% if not notifications_data.email %}
+    <p class="text-sm opacity-70 -mt-2">Set your email in Profile to enable.</p>
+    {% endif %}
+
+    <div class="divider my-0"></div>
+
+    <label class="form-control w-full">
+      <div class="label">
+        <span class="label-text">Phone number</span>
+        <span class="label-text-alt">
+          {% if notifications_data.phone_number %}{{ notifications_data.phone_number }}{% else %}Not set{% endif %}
+          — <a href="/profile" class="link">edit in Profile</a>
+        </span>
+      </div>
+    </label>
+    <label class="label cursor-pointer justify-start gap-3">
+      <input
+        type="checkbox"
+        id="notification_sms"
+        x-model="notification_sms"
+        {% if not notifications_data.phone_number %}disabled{% endif %}
+        class="toggle toggle-primary"
+      />
+      <span class="label-text">SMS notifications</span>
+    </label>
+    {% if not notifications_data.phone_number %}
+    <p class="text-sm opacity-70 -mt-2">Set your phone number in Profile to enable.</p>
+    {% endif %}
+
+    <button type="submit" class="btn btn-primary mt-2" :disabled="saving">
+      <span x-show="!saving">Save changes</span>
+      <span x-show="saving" x-cloak>Saving...</span>
+    </button>
+  </form>
+</div>

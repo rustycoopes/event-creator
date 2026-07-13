@@ -1,0 +1,249 @@
+{#
+  Settings > Storage panel fragment (Slice R7). Rendered standalone by
+  `GET /settings/event-creator/storage` for the Host's Settings-shell page to swap in via
+  same-origin HTMX fetch - NOT a full page (no `{% extends %}`), so it needs its own `x-data` root
+  rather than relying on a page-level Alpine root the Host's shell doesn't share with this service.
+  Alpine's MutationObserver picks up this new `x-data` element automatically once htmx swaps it
+  into the DOM (mirrors how organize-me's `partials/dashboard_body.html` fragments are
+  self-contained HTMX swap units, though that one doesn't need its own x-data since it has no
+  client-side state of its own).
+
+  Single-quoted x-data so the double-quoted JS strings inside don't terminate the attribute (the
+  register.html bug from organize-me issue #23, guarded here by the same regression tests ported
+  from tests/test_settings_page.py). storage_data seeds provider + folder_path from the server.
+#}
+<div
+  id="storage-tab-panel"
+  x-data='{
+    ...{{ storage_data | tojson }},
+    saving: false,
+    connecting: false,
+    disconnecting: false,
+    error: "",
+    success: false,
+    notice: "",
+    init() {
+      // Surface the outcome of a Google Drive / Dropbox redirect (see the callbacks in
+      // app/api/v1/storage_google_drive.py and app/api/v1/storage_dropbox.py) as a banner, then
+      // strip the query flag so a reload does not re-show it.
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("connected") === "1") {
+        this.notice = "Storage connected.";
+      } else if (params.get("error") === "google_drive_auth_failed") {
+        this.error = "Google Drive connection failed. Please try again.";
+      } else if (params.get("error") === "dropbox_auth_failed") {
+        this.error = "Dropbox connection failed. Please try again.";
+      } else if (params.get("error") === "save_folder_first") {
+        this.error = "Save your folder path first, then connect your storage provider.";
+      } else if (params.get("error") === "storage_not_configured") {
+        this.error = "Storage connection is not configured yet. Please try again later or contact support.";
+      }
+      if (params.has("connected") || params.has("error")) {
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+    },
+    async save() {
+      this.saving = true;
+      this.error = "";
+      this.success = false;
+      try {
+        const response = await fetch("/api/v1/storage-config", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider: this.provider,
+            folder_path: this.folder_path,
+          }),
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          this.error = data.detail || "Could not save changes. Please try again.";
+          return;
+        }
+        this.success = true;
+        this.has_config = true;
+      } catch (e) {
+        this.error = "Could not save changes. Please try again.";
+      } finally {
+        this.saving = false;
+      }
+    },
+    async connect(provider) {
+      this.connecting = true;
+      this.error = "";
+      try {
+        // Same-origin fetch (not a top-level form POST) so the SameSite=Lax auth cookie is sent;
+        // then navigate the browser to the provider with the returned consent URL.
+        const response = await fetch(`/api/v1/storage-config/${provider}/auth`, {
+          method: "POST",
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.authorization_url) {
+          if (response.status === 409) {
+            this.error = "Save your folder path first, then connect your storage provider.";
+          } else if (response.status === 503) {
+            this.error = "Storage connection is not configured yet. Please try again later or contact support.";
+          } else {
+            this.error = "Could not start the connection. Please try again.";
+          }
+          this.connecting = false;
+          return;
+        }
+        window.location = data.authorization_url;
+      } catch (e) {
+        this.error = "Could not start the connection. Please try again.";
+        this.connecting = false;
+      }
+    },
+    async disconnect(provider) {
+      this.disconnecting = true;
+      this.error = "";
+      try {
+        const response = await fetch(`/api/v1/storage-config/${provider}/disconnect`, {
+          method: "POST",
+        });
+        if (!response.ok) throw new Error("disconnect failed");
+        window.location.reload();
+      } catch (e) {
+        this.error = "Could not disconnect. Please try again.";
+        this.disconnecting = false;
+      }
+    },
+  }'
+>
+  <div role="alert" class="alert alert-success mt-2" x-show="success" x-cloak>
+    <span>Storage settings saved.</span>
+  </div>
+  <div role="alert" class="alert alert-info mt-2" x-show="notice" x-cloak>
+    <span x-text="notice"></span>
+  </div>
+  <div role="alert" class="alert alert-error mt-2" x-show="error" x-cloak>
+    <span x-text="error"></span>
+  </div>
+
+  <label class="form-control w-full">
+    <div class="label"><span class="label-text">Storage provider</span></div>
+    <select
+      id="provider"
+      name="provider"
+      x-model="provider"
+      class="select select-bordered w-full"
+    >
+      <option value="google_drive" {% if storage_data.provider == "google_drive" %}selected{% endif %}>Google Drive</option>
+      <option value="dropbox" {% if storage_data.provider == "dropbox" %}selected{% endif %}>Dropbox</option>
+      <option value="s3" {% if storage_data.provider == "s3" %}selected{% endif %}>Amazon S3</option>
+    </select>
+  </label>
+
+  {# Google Drive + Dropbox share the same folder-path form: both are live-wired providers. #}
+  <form
+    class="flex flex-col gap-4 mt-4"
+    x-show="provider === 'google_drive' || provider === 'dropbox'"
+    @submit.prevent="save"
+  >
+    <label class="form-control w-full">
+      <div class="label"><span class="label-text">Folder path</span></div>
+      <input
+        type="text"
+        id="folder_path"
+        name="folder_path"
+        x-model="folder_path"
+        value="{{ storage_data.folder_path }}"
+        placeholder="/OrganizeMe"
+        required
+        class="input input-bordered w-full"
+      />
+    </label>
+    <button type="submit" class="btn btn-primary mt-2" :disabled="saving">
+      <span x-show="!saving">Save changes</span>
+      <span x-show="saving" x-cloak>Saving...</span>
+    </button>
+  </form>
+
+  {# Google Drive connection controls. Connect starts the OAuth redirect; Disconnect clears the
+     stored tokens. type="button" so they never submit the folder-path form. #}
+  <div class="mt-4" x-show="provider === 'google_drive'" x-cloak>
+    <div class="divider"></div>
+
+    <div x-show="is_connected" x-cloak>
+      <div class="flex items-center gap-2">
+        <span class="badge badge-success">Connected</span>
+        <span class="text-sm opacity-70">Google Drive is connected.</span>
+      </div>
+      <button
+        type="button"
+        id="disconnect-drive"
+        class="btn btn-outline btn-error mt-3"
+        :disabled="disconnecting"
+        @click="disconnect('google-drive')"
+      >
+        <span x-show="!disconnecting">Disconnect Google Drive</span>
+        <span x-show="disconnecting" x-cloak>Disconnecting...</span>
+      </button>
+    </div>
+
+    <div x-show="!is_connected" x-cloak>
+      <p class="text-sm opacity-70" x-show="!has_config">
+        Save your folder path first, then connect Google Drive.
+      </p>
+      <button
+        type="button"
+        id="connect-drive"
+        class="btn btn-primary mt-1"
+        x-show="has_config"
+        :disabled="connecting"
+        @click="connect('google-drive')"
+      >
+        <span x-show="!connecting">Connect Google Drive</span>
+        <span x-show="connecting" x-cloak>Connecting...</span>
+      </button>
+    </div>
+  </div>
+
+  {# Dropbox connection controls - mirrors the Google Drive panel above exactly, pointed at the
+     dropbox endpoints (Slice R7 resolved decision: wire this up, unlike the monolith which only
+     ever built the backend). #}
+  <div class="mt-4" x-show="provider === 'dropbox'" x-cloak>
+    <div class="divider"></div>
+
+    <div x-show="is_connected" x-cloak>
+      <div class="flex items-center gap-2">
+        <span class="badge badge-success">Connected</span>
+        <span class="text-sm opacity-70">Dropbox is connected.</span>
+      </div>
+      <button
+        type="button"
+        id="disconnect-dropbox"
+        class="btn btn-outline btn-error mt-3"
+        :disabled="disconnecting"
+        @click="disconnect('dropbox')"
+      >
+        <span x-show="!disconnecting">Disconnect Dropbox</span>
+        <span x-show="disconnecting" x-cloak>Disconnecting...</span>
+      </button>
+    </div>
+
+    <div x-show="!is_connected" x-cloak>
+      <p class="text-sm opacity-70" x-show="!has_config">
+        Save your folder path first, then connect Dropbox.
+      </p>
+      <button
+        type="button"
+        id="connect-dropbox"
+        class="btn btn-primary mt-1"
+        x-show="has_config"
+        :disabled="connecting"
+        @click="connect('dropbox')"
+      >
+        <span x-show="!connecting">Connect Dropbox</span>
+        <span x-show="connecting" x-cloak>Connecting...</span>
+      </button>
+    </div>
+  </div>
+
+  {# S3 is reserved in the provider enum but has no write-endpoint/UI yet (kept a "coming soon"
+     stub, matching today's actual monolith behaviour - issue #95 was never built there either). #}
+  <div class="mt-4" x-show="provider === 's3'" x-cloak>
+    <p class="text-sm opacity-70">Amazon S3 support is coming soon.</p>
+  </div>
+</div>

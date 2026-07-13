@@ -1,0 +1,14 @@
+{#
+  Shared "please log back in" fragment for the three Settings tab routes
+  (app.pages.settings_fragments) when the Host auth cookie is missing/invalid/expired. These
+  fragments are consumed via same-origin HTMX fetch by the Host's Settings-shell page, not loaded
+  as a top-level navigation, so a 302 to /login (the convention every other page in this service
+  uses - see app.pages.dashboard) would just have htmx follow the redirect and swap the Host's
+  full login page's markup into a settings-tab-sized panel. Returning a small in-panel prompt
+  instead lets the shell page keep its own chrome and gives the visitor a real link to click.
+  Served with a 200 status (see settings_fragments.py's module docstring) so vanilla htmx actually
+  swaps this markup in rather than treating it as a failed request.
+#}
+<div role="alert" class="alert alert-warning">
+  <span>Your session has expired. <a href="/login" class="link">Log in</a> to continue.</span>
+</div>

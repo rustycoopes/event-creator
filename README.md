@@ -48,12 +48,31 @@ uv run mypy app tests
 ## Deploying
 
 CI/CD mirrors the Host's pattern (`.github/workflows/ci.yml` for QA on PRs,
-`deploy.yml` for prod on push to `main`). Both read `JWT_SECRET` via
-`--set-secrets` from the same GCP Secret Manager secrets the Host uses
-(`jwt-secret-qa` / `jwt-secret-prod`) — no network call between services, just the same signing
-key. Required GitHub secrets on this repo: `GCP_SA_KEY`, `SUPABASE_QA_URL`, `SUPABASE_PROD_URL`,
+`deploy.yml` for prod on push to `main`). `JWT_SECRET`, `ENCRYPTION_KEY`, and the two OAuth client
+*secrets* (Slice R7) are wired via `--set-secrets` from GCP Secret Manager — `jwt-secret-{qa,prod}`
+and `encryption-key-{qa,prod}` are the SAME secrets the Host reads (no network call between
+services, just the same signing/encryption key); `google-oauth-client-secret-{qa,prod}` and
+`dropbox-oauth-client-secret-{qa,prod}` are new secrets specific to this service (client secrets
+don't belong in a plaintext env-vars-file). The OAuth client *ids* (not confidential) go through
+the plaintext env-vars-file like `DATABASE_URL`.
+
+Required GitHub secrets on this repo: `GCP_SA_KEY`, `SUPABASE_QA_URL`, `SUPABASE_PROD_URL`,
 `JWT_SECRET_QA`, `JWT_SECRET_PROD` (the latter two only used by the `test` job's local
-pytest/alembic run, not the deploy itself).
+pytest/alembic run, not the deploy itself), `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`,
+`DROPBOX_OAUTH_CLIENT_ID`, `DROPBOX_OAUTH_CLIENT_SECRET`, `ENCRYPTION_KEY` (this last one only used
+by the `test` job — tests inject their own throwaway Fernet keys regardless of its value).
+
+**Human setup required before `deploy-qa`/`deploy-prod` will succeed** (Slice R7): create
+`google-oauth-client-secret-{qa,prod}` and `dropbox-oauth-client-secret-{qa,prod}` in GCP Secret
+Manager (seeded with the same values as the `GOOGLE_OAUTH_CLIENT_SECRET`/`DROPBOX_OAUTH_CLIENT_SECRET`
+GitHub secrets above), grant the Cloud Run runtime service account
+`roles/secretmanager.secretAccessor` on each, and add this service's OAuth callback URLs
+(`https://event-creator-{qa,prod}-*.run.app/api/v1/storage-config/google-drive/callback` and the
+`/dropbox/callback` equivalent, plus the eventual LB custom-domain callback once R11 lands) as
+additional authorized redirect URIs on the existing Google/Dropbox OAuth app consoles — the client
+id/secret are shared with the Host's own registered app, just with a second redirect URI added.
+`encryption-key-{qa,prod}` already exist in Secret Manager (created in Slice R6) and need no new
+setup.
 
 After the first deploy, re-run `organize-me`'s `infra/gcp_lb/provision.sh` (or `.ps1`) to attach
 this service's NEG/backend to the shared Load Balancer's URL map.
