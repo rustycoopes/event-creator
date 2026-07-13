@@ -1,3 +1,12 @@
+import os
+
+# Must run before any app module (in particular app.core.auth) is imported by a test module, so
+# the Drive/Dropbox CSRF cookies are set with Secure=False. httpx isn't a browser and doesn't get
+# the localhost-is-a-secure-context exception, so a Secure cookie set by /callback's /auth step
+# would never be resent by the test client on the next request (mirrors organize-me's own
+# tests/conftest.py, which this was ported from but missed this line - see #47).
+os.environ.setdefault("COOKIE_SECURE", "false")
+
 import time
 import uuid
 from collections.abc import AsyncIterator
