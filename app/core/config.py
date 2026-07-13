@@ -27,6 +27,25 @@ class Settings(BaseSettings):
     # (mirrors organize-me's flag). Defaults false; no route in this slice reads it yet, but the
     # ported factory function's signature depends on it existing on Settings.
     e2e_test_mode: bool = False
+    # Gemini API key used by app.services.llm.gemini.GoogleGeminiClient (ported from organize-me,
+    # issue #51). Empty default (mirrors the other optional secrets above) - GoogleGeminiClient
+    # raises a clear GeminiError if it's actually used while unset.
+    gemini_api_key: str = ""
+    # Resend API key used by app.services.notifications.email.ResendEmailSender (ported from
+    # organize-me). Empty default (mirrors the other optional secrets above) - ResendEmailSender
+    # raises a clear RuntimeError if it's actually used while unset.
+    resend_api_key: str = ""
+    # Swap via EMAIL_FROM once a custom domain is verified.
+    email_from: str = "OrganizeMe <onboarding@resend.dev>"
+    # Base URL used to build links (dashboard, run logs) in notification emails/SMS. Defaults to
+    # https://organize-me.app for production; override to http://localhost:3000 in dev.
+    base_url: str = "https://organize-me.app"
+    # Twilio credentials used by app.services.notifications.sms.TwilioSmsSender (ported from
+    # organize-me). Empty defaults - TwilioSmsSender raises a clear error if it's actually used
+    # while unset.
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_phone_number: str = ""
 
 
 @lru_cache

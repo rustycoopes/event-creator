@@ -1,0 +1,100 @@
+{% extends "chrome_authenticated_base.html" %}
+
+{% block title %}Run Detail — Event Creator{% endblock %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/htmx.min.js"></script>
+{% endblock %}
+
+{% block page %}
+<div class="mx-auto max-w-4xl">
+  <div class="flex items-center gap-3">
+    <a href="/logs" class="btn btn-ghost btn-sm">← Back to History</a>
+    <h1 class="text-2xl font-bold">Run Detail</h1>
+    <a
+      href="/api/v1/processing-runs/{{ run_id }}/logs/download"
+      download
+      class="btn btn-outline btn-sm ml-auto"
+    >Download logs</a>
+  </div>
+
+  {# Run metadata #}
+  <div class="mt-4 space-y-2 rounded-lg border border-base-300 p-4">
+    <div class="flex items-center justify-between">
+      <span class="text-sm opacity-70">Filename:</span>
+      <span class="font-medium">{{ run.filename }}</span>
+    </div>
+    <div class="flex items-center justify-between">
+      <span class="text-sm opacity-70">Status:</span>
+      <div id="run-status-detail" data-status="{{ run.status }}">
+        {% if run.status == "success" %}
+        <span class="badge badge-success">Success</span>
+        {% elif run.status == "failed" %}
+        <span class="badge badge-error">Failed</span>
+        {% elif run.status == "in_progress" %}
+        <span class="badge badge-info">In progress</span>
+        {% else %}
+        <span class="badge">Pending</span>
+        {% endif %}
+      </div>
+    </div>
+    <div class="flex items-center justify-between">
+      <span class="text-sm opacity-70">Events extracted:</span>
+      <span class="font-medium">{{ run.events_extracted_count }}</span>
+    </div>
+    <div class="flex items-center justify-between">
+      <span class="text-sm opacity-70">Started:</span>
+      <span class="text-sm">{{ run.started_at.strftime("%Y-%m-%d %H:%M:%S %Z") if run.started_at else "Not started" }}</span>
+    </div>
+    <div class="flex items-center justify-between">
+      <span class="text-sm opacity-70">Completed:</span>
+      <span class="text-sm">{{ run.completed_at.strftime("%Y-%m-%d %H:%M:%S %Z") if run.completed_at else "Not completed" }}</span>
+    </div>
+  </div>
+
+  {# Pipeline steps #}
+  <div class="mt-6">
+    <h2 class="mb-3 text-lg font-semibold">Pipeline Steps</h2>
+    <ol class="flex flex-col gap-2">
+      {% for step in steps %}
+      <li class="rounded-lg border border-base-300 p-3">
+        <div class="flex w-full items-center gap-3" id="step-{{ step.number }}">
+          {% include "partials/processing_step.html" %}
+        </div>
+        {# Expandable logs section #}
+        <div class="mt-3 hidden" id="logs-section-{{ step.number }}">
+          <details class="collapse border border-base-300">
+            <summary class="collapse-title text-sm font-medium">View logs</summary>
+            <div class="collapse-content">
+              <div
+                id="logs-{{ step.number }}"
+                hx-get="/api/html/processing-runs/{{ run_id }}/logs?step_number={{ step.number }}&page=1"
+                hx-trigger="revealed"
+                hx-target="this"
+                class="space-y-1"
+              >
+                <div class="text-sm opacity-70">Loading logs...</div>
+              </div>
+            </div>
+          </details>
+        </div>
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+</div>
+
+<script>
+  {# Show logs sections only for steps that have them #}
+  document.querySelectorAll('[id^="step-"]').forEach((stepEl) => {
+    const stepMatch = stepEl.id.match(/step-(\d+)/);
+    if (stepMatch) {
+      const stepNum = stepMatch[1];
+      const logsSection = document.getElementById(`logs-section-${stepNum}`);
+      if (logsSection) {
+        logsSection.classList.remove('hidden');
+      }
+    }
+  });
+</script>
+{% endblock %}

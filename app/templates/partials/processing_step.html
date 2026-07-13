@@ -1,0 +1,31 @@
+{#
+  Inner content of one pipeline step indicator (ported from organize-me's Slice 4.2/#53 to Event
+  Creator in Slice R8/R9).
+
+  Rendered both on the initial page paint and as the SSE-swapped fragment for the `step-N` event,
+  so the live update looks identical to the first render. `step` is a StepView
+  (number, name, status) — see app.services.pipeline.progress.
+
+  data-status is what tests assert on to read a step's live state.
+#}
+{%- set display = {
+  "pending":     {"cls": "badge-ghost",   "label": "Pending"},
+  "in_progress": {"cls": "badge-info",    "label": "In progress"},
+  "success":     {"cls": "badge-success", "label": "Done"},
+  "failed":      {"cls": "badge-error",   "label": "Failed"},
+  "skipped":     {"cls": "badge-ghost",   "label": "Skipped"},
+} -%}
+{%- set d = display.get(step.status, display["pending"]) -%}
+{% if step.status == "in_progress" %}
+<span class="loading loading-spinner loading-sm text-info" aria-hidden="true"></span>
+{% elif step.status == "success" %}
+<span class="badge {{ d.cls }} badge-lg" aria-hidden="true">✓</span>
+{% elif step.status == "failed" %}
+<span class="badge {{ d.cls }} badge-lg" aria-hidden="true">✕</span>
+{% elif step.status == "skipped" %}
+<span class="badge {{ d.cls }} badge-lg" aria-hidden="true">–</span>
+{% else %}
+<span class="badge {{ d.cls }} badge-lg" aria-hidden="true">{{ step.number }}</span>
+{% endif %}
+<span class="grow font-medium">{{ step.name }}</span>
+<span class="text-xs opacity-70" data-status="{{ step.status }}">{{ d.label }}</span>

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processing Failed</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333;">
+    <!-- Container -->
+    <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border: 1px solid #e5e7eb;">
+        <!-- Header -->
+        <div style="background-color: #1f2937; color: #ffffff; padding: 24px; text-align: center;">
+            <h1 style="margin: 0; font-size: 24px; font-weight: bold;">OrganizeMe</h1>
+            <p style="margin: 8px 0 0 0; font-size: 14px; opacity: 0.9;">Processing Failed</p>
+        </div>
+
+        <!-- Content -->
+        <div style="padding: 32px;">
+            <p style="margin: 0 0 24px 0; font-size: 16px;">
+                Hi,
+            </p>
+
+            <p style="margin: 0 0 24px 0; font-size: 16px;">
+                Unfortunately, we encountered an issue while processing your file <strong>{{ filename }}</strong>.
+            </p>
+
+            <!-- Alert Section -->
+            <div style="background-color: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 16px; margin: 24px 0;">
+                <p style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold; color: #991b1b;">
+                    Error Details
+                </p>
+                <p style="margin: 0; font-size: 14px; color: #7f1d1d;">
+                    {{ error_message }}
+                </p>
+            </div>
+
+            <p style="margin: 24px 0; font-size: 16px;">
+                Please review the processing logs for more information.
+            </p>
+
+            <!-- CTA Button -->
+            <div style="text-align: center; margin: 32px 0;">
+                <a href="{{ log_url }}" style="display: inline-block; background-color: #1f2937; color: #ffffff; padding: 12px 32px; border-radius: 6px; text-decoration: none; font-weight: bold; font-size: 16px;">
+                    View Processing Logs
+                </a>
+            </div>
+
+            <p style="margin: 24px 0 0 0; font-size: 14px; color: #6b7280;">
+                If you need assistance, please contact us.
+            </p>
+        </div>
+
+        <!-- Footer -->
+        <div style="background-color: #f9fafb; padding: 16px; text-align: center; border-top: 1px solid #e5e7eb;">
+            <p style="margin: 0; font-size: 12px; color: #6b7280;">
+                OrganizeMe • Automated Event Extraction
+            </p>
+        </div>
+    </div>
+</body>
+</html>

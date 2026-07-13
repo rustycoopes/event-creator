@@ -1,0 +1,21 @@
+{% extends "chrome_authenticated_base.html" %}
+
+{% block title %}Logs — Event Creator{% endblock %}
+
+{% block head %}
+{# HTMX powers the filter/sort/pagination interactions below - narrowing/sorting the grid swaps
+   #logs-body in place instead of a full page reload (ported from organize-me's #111). #}
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/htmx.min.js"></script>
+{% endblock %}
+
+{% block page %}
+<div class="card bg-base-100 shadow-xl">
+  <div class="card-body">
+    <h1 class="card-title">Logs</h1>
+
+    <div id="logs-body">
+      {% include "partials/logs_body.html" %}
+    </div>
+  </div>
+</div>
+{% endblock %}
