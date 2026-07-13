@@ -36,6 +36,7 @@ import asyncio
 import base64
 import logging
 import os
+import ssl
 import uuid
 from datetime import datetime, timezone
 
@@ -71,6 +72,15 @@ logger = logging.getLogger(__name__)
 _REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
 celery_app = Celery("event_creator", broker=_REDIS_URL, backend=_REDIS_URL)
+
+if _REDIS_URL.startswith("rediss://"):
+    # kombu's redis transport refuses to start over TLS (`rediss://`, e.g. Upstash) unless
+    # ssl_cert_reqs is set explicitly - "A rediss:// URL must have parameter ssl_cert_reqs..."
+    # crashes the worker at startup otherwise (celery/backends/redis.py). CERT_REQUIRED verifies
+    # the server cert against the system CA bundle, same as any other TLS client would default to.
+    _redis_ssl_options = {"ssl_cert_reqs": ssl.CERT_REQUIRED}
+    celery_app.conf.broker_use_ssl = _redis_ssl_options
+    celery_app.conf.redis_backend_use_ssl = _redis_ssl_options
 
 
 def _session_maker() -> async_sessionmaker[AsyncSession]:
