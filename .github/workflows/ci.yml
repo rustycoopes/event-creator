@@ -161,3 +161,10 @@ jobs:
 
       - name: Run Host<->Event Creator boundary E2E suite against QA
         run: npx playwright test host-event-creator-boundary.spec.ts
+
+      - name: Upload Playwright report
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: host-e2e/e2e/playwright-report/
