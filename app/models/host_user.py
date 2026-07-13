@@ -9,9 +9,15 @@ none of which lives in event-creator's own schema.
 `HostUser` is mapped onto `host.users` - the same Postgres database, a cross-schema query, no
 network call - but is **select-only by convention and by construction**:
 
-- It's mapped on `ReadOnlyBase` (see app.db.readonly_base), a declarative base kept entirely
-  separate from `app.db.base.Base` / Alembic's `target_metadata`, so this repo's own migration
-  history can never emit DDL against a table it doesn't own.
+- It's mapped on the same `app.db.base.Base` as every other model here, NOT a separate metadata -
+  an earlier version of this file used a separate `DeclarativeBase` to keep it out of Alembic's
+  `target_metadata` entirely, but that broke `storage_configs.user_id`'s/`user_settings.user_id`'s
+  string-based `ForeignKey("host.users.id")`: SQLAlchemy only resolves a string FK target against
+  a table registered in the *same* `MetaData`, so a separate base made those columns fail to
+  configure at all (`NoReferencedTableError`, caught by CI). Safety from Alembic autogenerate ever
+  managing this table instead comes from `migrations/env.py`'s `include_object` filter, which
+  excludes the `host` schema outright - a filter survives `target_metadata` sharing; a separate
+  `DeclarativeBase` doesn't survive FK resolution.
 - Only the columns this service actually reads are declared (`id`, `email`, `phone_number`,
   `dark_mode`) - deliberately omitting `hashed_password`, `is_active`, `is_superuser`,
   `is_verified`, etc., which live on the Host's real `User` model (see
@@ -29,10 +35,10 @@ from fastapi_users_db_sqlalchemy.generics import GUID
 from sqlalchemy import Boolean, String
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.readonly_base import ReadOnlyBase
+from app.db.base import Base
 
 
-class HostUser(ReadOnlyBase):
+class HostUser(Base):
     """SELECT-ONLY. Never insert/update/delete through this class - see module docstring."""
 
     __tablename__ = "users"

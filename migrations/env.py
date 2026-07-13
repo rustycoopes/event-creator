@@ -26,6 +26,21 @@ DATABASE_URL = to_asyncpg_url(get_settings().database_url)
 VERSION_TABLE_SCHEMA = "event_creator"
 
 
+def include_object(  # noqa: ANN001
+    object, name, type_, reflected, compare_to  # noqa: A002
+) -> bool:
+    """Excludes the `host` schema from autogenerate entirely.
+
+    `app.models.host_user.HostUser` (Slice R7) is a read-only mapping onto the Host repo's
+    `host.users` table, sharing `Base.metadata` with every model here so `storage_configs`'/
+    `user_settings`' `ForeignKey("host.users.id")` can resolve (SQLAlchemy needs the referenced
+    table in the same metadata). Without this filter, `alembic revision --autogenerate` would see
+    `host.users` as "in our metadata but let's diff it against the live DB" and could propose
+    ALTER/DROP statements against a table this repo has no business migrating.
+    """
+    return getattr(object, "schema", None) != "host"
+
+
 def run_migrations_offline() -> None:
     context.configure(
         url=DATABASE_URL,
@@ -33,6 +48,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         version_table_schema=VERSION_TABLE_SCHEMA,
+        include_object=include_object,
     )
 
     with context.begin_transaction():
@@ -44,6 +60,7 @@ def do_run_migrations(connection: Connection) -> None:
         connection=connection,
         target_metadata=target_metadata,
         version_table_schema=VERSION_TABLE_SCHEMA,
+        include_object=include_object,
     )
 
     with context.begin_transaction():
