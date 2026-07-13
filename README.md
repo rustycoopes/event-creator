@@ -57,3 +57,8 @@ pytest/alembic run, not the deploy itself).
 
 After the first deploy, re-run `organize-me`'s `infra/gcp_lb/provision.sh` (or `.ps1`) to attach
 this service's NEG/backend to the shared Load Balancer's URL map.
+
+## Deployed services
+
+- Prod: `event-creator-prod` (Cloud Run, `northamerica-northeast1`) — first deployed 2026-07-12.
+- QA: `event-creator-qa` — deploys on every PR into `main` via `ci.yml`.
