@@ -17,9 +17,11 @@ COPY app ./app
 
 RUN uv sync --frozen --no-dev
 
-EXPOSE 8000
+EXPOSE 8080
 
-# --forwarded-allow-ips='*' trusts X-Forwarded-Proto from Cloud Run's edge proxy (TLS-terminating,
-# single-hop, never directly reachable) - see organize-me's supervisord.conf for the identical
-# rationale on the Host side.
-CMD ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=*"]
+# Listens on Cloud Run's injected $PORT (defaults to 8080 for a fresh service, unlike the Host's
+# organizeme-qa/prod, which had containerPort=8000 set on an earlier deploy and kept it since -
+# event-creator has no such inherited config, so it must follow Cloud Run's actual default rather
+# than assume a hardcoded port). --forwarded-allow-ips='*' trusts X-Forwarded-Proto from Cloud
+# Run's edge proxy (TLS-terminating, single-hop, never directly reachable).
+CMD ["/bin/sh", "-c", "/app/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --proxy-headers --forwarded-allow-ips='*'"]
