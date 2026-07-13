@@ -17,6 +17,18 @@ jobs:
     env:
       DATABASE_URL: ${{ secrets.SUPABASE_QA_URL }}
       JWT_SECRET: ${{ secrets.JWT_SECRET_QA }}
+      # Slice R7 storage-connect OAuth tests build real consent URLs/exchange calls against fakes,
+      # but assert the client_id/secret actually configured flows through - same secrets as
+      # organize-me's own ci.yml (mirrors that repo's test job), reused here since these are the
+      # same registered Google/Dropbox OAuth apps, just with this service's own redirect URI added
+      # as an additional authorized callback in each app's console.
+      GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+      GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      DROPBOX_OAUTH_CLIENT_ID: ${{ secrets.DROPBOX_OAUTH_CLIENT_ID }}
+      DROPBOX_OAUTH_CLIENT_SECRET: ${{ secrets.DROPBOX_OAUTH_CLIENT_SECRET }}
+      # Storage-credential encryption key. Tests inject their own throwaway keys regardless, so
+      # this has no effect on pass/fail - set for parity with organize-me's own ci.yml.
+      ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,15 +73,22 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
 
-      # JWT_SECRET is intentionally absent here (mirrors the Host's R4 pattern): it's wired below
-      # via --set-secrets from the SAME GCP Secret Manager secret (`jwt-secret-qa`) the Host reads,
-      # so both services verify with the identical signing key without a network call between them.
+      # JWT_SECRET, ENCRYPTION_KEY, and the two OAuth client *secrets* are intentionally absent
+      # here: all four are wired below via --set-secrets from GCP Secret Manager
+      # (`jwt-secret-qa`, `encryption-key-qa` shared with the Host per R4/R6;
+      # `google-oauth-client-secret-qa`/`dropbox-oauth-client-secret-qa` new to this service -
+      # client secrets don't belong in a plaintext env-vars-file readable via
+      # `gcloud run services describe`, unlike the client *ids* below, which aren't confidential).
       - name: Write Cloud Run env vars file
         env:
           DATABASE_URL: ${{ secrets.SUPABASE_QA_URL }}
+          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
+          DROPBOX_OAUTH_CLIENT_ID: ${{ secrets.DROPBOX_OAUTH_CLIENT_ID }}
         run: |
           cat > /tmp/cloud-run-env.yaml <<EOF
           DATABASE_URL: "${DATABASE_URL}"
+          GOOGLE_OAUTH_CLIENT_ID: "${GOOGLE_OAUTH_CLIENT_ID}"
+          DROPBOX_OAUTH_CLIENT_ID: "${DROPBOX_OAUTH_CLIENT_ID}"
           EOF
 
       - name: Build image
@@ -91,6 +110,6 @@ jobs:
             --region=${{ env.GCP_REGION }} \
             --project=${{ env.GCP_PROJECT_ID }} \
             --env-vars-file=/tmp/cloud-run-env.yaml \
-            --set-secrets=JWT_SECRET=jwt-secret-qa:latest \
+            --set-secrets=JWT_SECRET=jwt-secret-qa:latest,ENCRYPTION_KEY=encryption-key-qa:latest,GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret-qa:latest,DROPBOX_OAUTH_CLIENT_SECRET=dropbox-oauth-client-secret-qa:latest \
             --allow-unauthenticated \
             --quiet
