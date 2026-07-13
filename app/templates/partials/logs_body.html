@@ -1,0 +1,51 @@
+{#
+  The filter form + logs grid, as one HTMX swap unit (ported from organize-me's #111). Both must
+  refresh together: the sort-direction links live in the grid's column headers but need the
+  current filter values carried along, so if only the grid swapped a header click after a filter
+  change could submit stale filter values from a form that never re-rendered. Included by
+  logs.html for a normal full-page load, and returned standalone by app.pages.logs for HTMX
+  requests.
+#}
+<form
+  id="run-filters"
+  hx-get="/logs"
+  hx-target="#logs-body"
+  hx-push-url="true"
+  hx-trigger="change"
+  class="flex flex-wrap gap-2 items-end mt-2"
+>
+  {# Carries the current sort so a filter change doesn't reset it back to newest-first; the
+     column-header sort links below are the only thing that changes these values. #}
+  <input type="hidden" name="sort_by" value="{{ filters.sort_by }}" />
+  <input type="hidden" name="sort_dir" value="{{ filters.sort_dir }}" />
+
+  <div class="form-control">
+    <label class="label label-text text-xs" for="filter-status">Status</label>
+    <select id="filter-status" name="status" class="select select-bordered select-sm">
+      <option value="">All statuses</option>
+      {% for s in statuses %}
+      <option value="{{ s.value }}" {% if filters.status == s.value %}selected{% endif %}>{{ s.value }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="form-control">
+    <label class="label label-text text-xs" for="filter-date-from">From</label>
+    <input
+      id="filter-date-from" type="date" name="date_from" value="{{ filters.date_from }}"
+      class="input input-bordered input-sm"
+    />
+  </div>
+
+  <div class="form-control">
+    <label class="label label-text text-xs" for="filter-date-to">To</label>
+    <input
+      id="filter-date-to" type="date" name="date_to" value="{{ filters.date_to }}"
+      class="input input-bordered input-sm"
+    />
+  </div>
+</form>
+
+<div id="logs-grid-panel" class="mt-2">
+  {% include "partials/logs_grid.html" %}
+</div>

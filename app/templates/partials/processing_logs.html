@@ -1,0 +1,62 @@
+{#
+  Log lines for one step, with pagination and search (ported from organize-me's Slice 6.2/#84 to
+  Event Creator in Slice R8/R9).
+
+  Used by /api/html/processing-runs/{id}/logs and swapped in via HTMX.
+  `logs` is an object with: step_number, step_name, log_lines, page, page_size, total.
+#}
+<div class="space-y-2">
+  {# Search form #}
+  <form
+    hx-get="/api/html/processing-runs/{{ run_id }}/logs"
+    hx-target="closest div"
+    hx-trigger="change, keyup changed delay:300ms from:input[type='text']"
+    class="flex gap-2"
+  >
+    <input type="hidden" name="step_number" value="{{ logs.step_number }}" />
+    <input type="hidden" name="page" value="1" />
+    <input
+      type="text"
+      name="search"
+      placeholder="Filter logs..."
+      class="input input-bordered input-sm flex-1"
+      value="{{ search or '' }}"
+    />
+  </form>
+
+  {# Log entries #}
+  {% if logs.log_lines %}
+  <div class="space-y-1 rounded bg-base-200 p-2 font-mono text-xs">
+    {% for line in logs.log_lines %}
+    <div class="break-words opacity-90">{{ line }}</div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="rounded bg-base-100 p-2 text-sm opacity-70">
+    {% if search %}No matching log lines.{% else %}No log lines for this step.{% endif %}
+  </div>
+  {% endif %}
+
+  {# Pagination #}
+  {% if logs.total > logs.page_size %}
+  <div class="flex items-center justify-between gap-2">
+    <span class="text-xs opacity-70">{{ (logs.page - 1) * logs.page_size + 1 }}–{{ ((logs.page - 1) * logs.page_size + logs.log_lines|length) }} of {{ logs.total }}</span>
+    <div class="flex gap-1">
+      {% if logs.page > 1 %}
+      <a
+        class="btn btn-ghost btn-xs"
+        hx-get="/api/html/processing-runs/{{ run_id }}/logs?step_number={{ logs.step_number }}&page={{ logs.page - 1 }}&search={{ search or '' }}"
+        hx-target="closest div[id^='logs-']"
+      >Prev</a>
+      {% endif %}
+      {% if (logs.page * logs.page_size) < logs.total %}
+      <a
+        class="btn btn-ghost btn-xs"
+        hx-get="/api/html/processing-runs/{{ run_id }}/logs?step_number={{ logs.step_number }}&page={{ logs.page + 1 }}&search={{ search or '' }}"
+        hx-target="closest div[id^='logs-']"
+      >Next</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>

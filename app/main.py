@@ -3,11 +3,16 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.v1.import_pending_files import router as import_pending_files_router
+from app.api.v1.processing_runs import router as processing_runs_router
 from app.api.v1.storage_config import router as storage_config_router
 from app.api.v1.storage_dropbox import router as storage_dropbox_router
 from app.api.v1.storage_google_drive import router as storage_google_drive_router
+from app.api.v1.upload import router as upload_router
 from app.api.v1.user_settings import router as user_settings_router
 from app.pages.dashboard import router as dashboard_router
+from app.pages.logs import router as logs_router
+from app.pages.processing import router as processing_router
 from app.pages.settings_fragments import router as settings_fragments_router
 
 
@@ -29,6 +34,11 @@ app.include_router(storage_config_router)
 app.include_router(storage_google_drive_router)
 app.include_router(storage_dropbox_router)
 app.include_router(user_settings_router)
+app.include_router(upload_router)
+app.include_router(import_pending_files_router)
+app.include_router(processing_runs_router)
+app.include_router(processing_router)
+app.include_router(logs_router)
 
 
 @app.get("/health")

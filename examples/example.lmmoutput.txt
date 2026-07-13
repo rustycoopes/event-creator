@@ -1,0 +1,222 @@
+[
+  {
+    "type": "School",
+    "description": "Christine to pick up Lucy.",
+    "resolved_date": "Sunday 31 May 2026 at 3:45 PM",
+    "raw_date_text": "345",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "Activity",
+    "description": "Russ to bring Lucy to swim meet.",
+    "resolved_date": "Saturday 6 June 2026",
+    "raw_date_text": "Saturday",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "Weekend plans",
+    "description": "Russ to bring kids' backpacks to Christine on Sunday, and Christine to keep kids and bring them to school on Monday morning.",
+    "resolved_date": "Sunday 7 June 2026, Monday 8 June 2026",
+    "raw_date_text": "Sunday, Monday morning",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "Medical",
+    "description": "Christine to take Oliver to dermatologist appointment.",
+    "resolved_date": "Thursday 4 June 2026 at 3:45 PM",
+    "raw_date_text": "Thursday, 3:45 in calendar",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "School",
+    "description": "Christine to pick up Oliver at 3:30 PM, and Russ to pick up Lucy.",
+    "resolved_date": "Thursday 4 June 2026 at 3:30 PM",
+    "raw_date_text": "3:30",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "School",
+    "description": "Russ to pick up Oliver from 25 Mimosa Court.",
+    "resolved_date": "Wednesday 3 June 2026 at 6:00 PM",
+    "raw_date_text": "6:00 p.m. please",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "Weekend plans",
+    "description": "Christine to pick up Oliver and keep Lucy overnight.",
+    "resolved_date": "Thursday 4 June 2026",
+    "raw_date_text": "tomorrow",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "School",
+    "description": "Lucy to attend Oliver's graduation.",
+    "resolved_date": "Wednesday 17 June 2026",
+    "raw_date_text": "the 17th",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "School",
+    "description": "Russ to pick up Lucy.",
+    "resolved_date": "Friday 5 June 2026 at 8:30 AM",
+    "raw_date_text": "8:30",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "Activity",
+    "description": "Christine to take Lucy to swim.",
+    "resolved_date": "Wednesday 10 June 2026",
+    "raw_date_text": "tomorrow",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "Other",
+    "description": "Christine to bring black shorts and white top for Oliver.",
+    "resolved_date": "Thursday 11 June 2026",
+    "raw_date_text": "later",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "School",
+    "description": "Christine to pick up Oliver from school.",
+    "resolved_date": "Thursday 11 June 2026",
+    "raw_date_text": "shortly",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "School",
+    "description": "Oliver to attend school concert.",
+    "resolved_date": "Thursday 11 June 2026 at 6:45 PM",
+    "raw_date_text": "tonight, 6:45",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "Medical",
+    "description": "Meeting with nurse regarding Oliver.",
+    "resolved_date": "Tuesday 16 June 2026 at 11:30 AM",
+    "raw_date_text": "tomorrow maybe between 11-12, 11:30",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "School",
+    "description": "Oliver to be marked absent from school for multiple days, including one mental health day, and Russ to put this into the school dismissal manager.",
+    "resolved_date": "Thursday 18 June 2026, Monday 22 June 2026, Tuesday 23 June 2026, Wednesday 24 June 2026",
+    "raw_date_text": "Thursday, Monday, Tuesday and Wednesday",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "Other",
+    "description": "Russ to iron Oliver's shirt for graduation.",
+    "resolved_date": "Wednesday 17 June 2026",
+    "raw_date_text": "today",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "Other",
+    "description": "Oliver to pick up his watch from Russ.",
+    "resolved_date": "Wednesday 17 June 2026",
+    "raw_date_text": "TBC",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "Other",
+    "description": "Christine to stop by Russ's place to say goodbye to Oliver.",
+    "resolved_date": "Thursday 18 June 2026 at 8:00 AM",
+    "raw_date_text": "around like 8 AM",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "Other",
+    "description": "Oliver's birthday party.",
+    "resolved_date": "Tuesday 30 June 2026",
+    "raw_date_text": "30th",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "Weekend plans",
+    "description": "Russ to keep kids Sunday night and drop them back early Monday morning; Christine to take Oliver to Jumpstart program Monday morning.",
+    "resolved_date": "Sunday 28 June 2026, Monday 29 June 2026",
+    "raw_date_text": "Sunday, early on monday, Monday morning",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "Other",
+    "description": "Christine to have Lucy put Amazon packages into Russ's garage.",
+    "resolved_date": "Wednesday 24 June 2026",
+    "raw_date_text": "today, after school",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  },
+  {
+    "type": "Other",
+    "description": "Russ to drop off Oliver's backpack.",
+    "resolved_date": "Sunday 28 June 2026",
+    "raw_date_text": "TBC",
+    "agreed_by": [
+      "Russ Cooper",
+      "Christine Cooper"
+    ]
+  }
+]

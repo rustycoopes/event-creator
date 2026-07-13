@@ -1,0 +1,97 @@
+{#
+  The spreadsheet-style runs grid + pagination fragment (ported from organize-me's #111). Nested
+  inside partials/logs_body.html, which is the actual HTMX swap unit - pagination links here
+  target #logs-body (not just this fragment's own #logs-grid-panel wrapper) so the filter form's
+  hidden sort fields re-render too and stay in sync with the page that was just navigated to.
+#}
+{% if total %}
+<p class="text-sm opacity-70">{{ total }} total processing run{{ "s" if total != 1 else "" }}</p>
+{% endif %}
+
+{% if runs %}
+<div class="overflow-x-auto mt-2">
+  <table class="table table-sm" id="logs-grid">
+    <thead>
+      <tr>
+        {# aria-sort on the active column tells screen readers the grid's current sort state,
+           matching the visual ▲/▼ indicator (WAI-ARIA sortable-table pattern). #}
+        <th aria-sort="{{ "ascending" if filters.sort_by == "date" and filters.sort_dir == "asc" else "descending" if filters.sort_by == "date" else "none" }}">
+          <a href="{{ sort_urls.date }}" hx-get="{{ sort_urls.date }}" hx-target="#logs-body" hx-push-url="true" class="link link-hover">
+            Date{% if filters.sort_by == "date" %} {{ "▲" if filters.sort_dir == "asc" else "▼" }}{% endif %}
+          </a>
+        </th>
+        <th aria-sort="{{ "ascending" if filters.sort_by == "filename" and filters.sort_dir == "asc" else "descending" if filters.sort_by == "filename" else "none" }}">
+          <a href="{{ sort_urls.filename }}" hx-get="{{ sort_urls.filename }}" hx-target="#logs-body" hx-push-url="true" class="link link-hover">
+            Filename{% if filters.sort_by == "filename" %} {{ "▲" if filters.sort_dir == "asc" else "▼" }}{% endif %}
+          </a>
+        </th>
+        <th aria-sort="{{ "ascending" if filters.sort_by == "status" and filters.sort_dir == "asc" else "descending" if filters.sort_by == "status" else "none" }}">
+          <a href="{{ sort_urls.status }}" hx-get="{{ sort_urls.status }}" hx-target="#logs-body" hx-push-url="true" class="link link-hover">
+            Status{% if filters.sort_by == "status" %} {{ "▲" if filters.sort_dir == "asc" else "▼" }}{% endif %}
+          </a>
+        </th>
+        <th>Events</th>
+        <th>Details</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for run in runs %}
+      {#
+        run.id is a server-generated UUID (hex digits + hyphens only), so embedding it directly
+        in plain JS string/attribute values here is safe - no user-controlled text is inlined
+        into these attributes. tabindex + onkeydown make the whole-row click target
+        keyboard-operable (Enter), not just mouse-clickable - a bare onclick on a <tr> is
+        otherwise invisible to keyboard/screen-reader users.
+      #}
+      <tr
+        class="hover cursor-pointer"
+        tabindex="0"
+        role="link"
+        aria-label="View run details for {{ run.filename }}"
+        onclick="window.location='/processing-runs/{{ run.id }}'"
+        onkeydown="if (event.key === 'Enter') window.location='/processing-runs/{{ run.id }}'"
+      >
+        <td>
+          <a href="/processing-runs/{{ run.id }}" class="link link-primary" onclick="event.stopPropagation()">
+            {{ run.created_at }}
+          </a>
+        </td>
+        <td>{{ run.filename }}</td>
+        <td>
+          <span class="badge {% if run.status == 'success' %}badge-success{% elif run.status == 'failed' %}badge-error{% elif run.status == 'in_progress' %}badge-warning{% else %}badge-info{% endif %}">
+            {{ run.status }}
+          </span>
+        </td>
+        <td>{{ run.events_extracted_count }}</td>
+        <td class="max-w-xs truncate" title="{{ run.detail_summary }}">{{ run.detail_summary }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if total_pages > 1 %}
+<div class="flex justify-center items-center gap-2 mt-4">
+  {% if first_url %}
+  <a href="{{ first_url }}" hx-get="{{ first_url }}" hx-target="#logs-body" hx-push-url="true" class="btn btn-sm">First</a>
+  {% endif %}
+  {% if prev_url %}
+  <a href="{{ prev_url }}" hx-get="{{ prev_url }}" hx-target="#logs-body" hx-push-url="true" class="btn btn-sm">Previous</a>
+  {% endif %}
+  <span class="btn btn-sm btn-ghost no-animation">Page {{ page }} of {{ total_pages }}</span>
+  {% if next_url %}
+  <a href="{{ next_url }}" hx-get="{{ next_url }}" hx-target="#logs-body" hx-push-url="true" class="btn btn-sm">Next</a>
+  {% endif %}
+  {% if last_url %}
+  <a href="{{ last_url }}" hx-get="{{ last_url }}" hx-target="#logs-body" hx-push-url="true" class="btn btn-sm">Last</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+{% if has_active_filters %}
+<p class="opacity-70 mt-2">No processing runs match these filters.</p>
+{% else %}
+<p class="text-center opacity-70 py-8">No processing runs yet</p>
+{% endif %}
+{% endif %}

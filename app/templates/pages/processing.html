@@ -1,0 +1,58 @@
+{% extends "chrome_authenticated_base.html" %}
+
+{% block title %}Processing — Event Creator{% endblock %}
+
+{% block head %}
+{# HTMX + its SSE extension power the live step updates; only this page needs them, and only while
+   a run is still going, so they're loaded here (not the shared chrome) and skipped for a finished
+   run. Pinned to htmx 1.9.x, whose SSE extension ships in-package (matches organize-me). #}
+{% if live %}
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/htmx.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/ext/sse.js"></script>
+{% endif %}
+{% endblock %}
+
+{% block page %}
+<div class="mx-auto max-w-2xl">
+  <h1 class="text-2xl font-bold">Processing</h1>
+
+  {% if run_id %}
+  <p class="mt-1 text-sm opacity-70">
+    Watching <span class="font-medium">{{ filename }}</span> as it's processed.
+  </p>
+
+  {# One SSE connection for the whole run; sse-close="done" closes it when the run finishes. A run
+     that's already terminal renders statically (see `live`), so the sse-* attributes are only wired
+     when there's still progress to stream. #}
+  <div
+    class="mt-4"
+    {% if live %}hx-ext="sse" sse-connect="/api/v1/processing-runs/{{ run_id }}/sse" sse-close="done"{% endif %}
+  >
+    <div id="run-status" sse-swap="run-status" class="mb-4">
+      {% include "partials/processing_status.html" %}
+    </div>
+
+    <ol id="pipeline-steps" class="flex flex-col gap-2">
+      {% for step in steps %}
+      <li class="rounded-lg border border-base-300 p-3">
+        <div
+          id="step-{{ step.number }}"
+          class="flex w-full items-center gap-3"
+          sse-swap="step-{{ step.number }}"
+        >
+          {% include "partials/processing_step.html" %}
+        </div>
+      </li>
+      {% endfor %}
+    </ol>
+  </div>
+  {% else %}
+  {# No runs yet: steer the user to Upload. #}
+  <div class="mt-6 flex flex-col items-center gap-3 rounded-lg border border-dashed border-base-300 p-8 text-center">
+    <p class="font-medium">No processing runs yet.</p>
+    <p class="text-sm opacity-70">Upload a conversation and its progress will show up here.</p>
+    <a href="/upload" class="btn btn-primary btn-sm">Upload a file</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

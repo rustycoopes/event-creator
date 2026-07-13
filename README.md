@@ -72,7 +72,10 @@ GitHub secrets above), grant the Cloud Run runtime service account
 additional authorized redirect URIs on the existing Google/Dropbox OAuth app consoles — the client
 id/secret are shared with the Host's own registered app, just with a second redirect URI added.
 `encryption-key-{qa,prod}` already exist in Secret Manager (created in Slice R6) and need no new
-setup.
+setup. `redis-url-{qa,prod}` (Slice R8, backing the Celery broker/backend for `app.worker`, run
+via supervisord alongside the web process — see `supervisord.conf`/`Dockerfile`) already exist in
+Secret Manager and are already granted `roles/secretmanager.secretAccessor` on the Cloud Run
+runtime service account — no further human action needed for this one.
 
 After the first deploy, re-run `organize-me`'s `infra/gcp_lb/provision.sh` (or `.ps1`) to attach
 this service's NEG/backend to the shared Load Balancer's URL map.

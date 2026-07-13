@@ -1,0 +1,25 @@
+{#
+  Overall run-status banner (ported from organize-me's Slice 4.2/#53 to Event Creator in Slice
+  R8/R9). Rendered on first paint and swapped in by the `run-status` SSE event. `run_status` is
+  the run's status value (pending/in_progress/success/failed). data-run-status is asserted on by
+  tests.
+#}
+<div data-run-status="{{ run_status }}">
+  {% if run_status == "success" %}
+  <div role="alert" class="alert alert-success">
+    <span>Processing complete — all steps finished.</span>
+  </div>
+  {% elif run_status == "failed" %}
+  <div role="alert" class="alert alert-error">
+    <span>Processing failed. <a href="/logs" class="link">View the logs</a> to see what went wrong.</span>
+  </div>
+  {% elif run_status == "in_progress" %}
+  <div role="alert" class="alert alert-info">
+    <span>Processing in progress…</span>
+  </div>
+  {% else %}
+  <div role="alert" class="alert">
+    <span>Waiting to start…</span>
+  </div>
+  {% endif %}
+</div>
