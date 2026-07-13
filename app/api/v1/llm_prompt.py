@@ -69,8 +69,21 @@ async def set_user_prompt(db: AsyncSession, user_id: uuid.UUID, prompt_text: str
     if prompt is None:
         prompt = LLMPrompt(user_id=user_id, prompt_text=prompt_text)
         db.add(prompt)
-    else:
-        prompt.prompt_text = prompt_text
+        try:
+            await db.commit()
+        except IntegrityError:
+            # A concurrent PUT/reset for the same user with no row yet (e.g. a double-click, or
+            # two tabs) created it first; roll back our losing INSERT and update theirs instead,
+            # same race get_or_create_user_prompt guards against.
+            await db.rollback()
+            existing = await get_user_prompt(db, user_id)
+            if existing is None:
+                raise
+            existing.prompt_text = prompt_text
+            await db.commit()
+            return existing
+        return prompt
+    prompt.prompt_text = prompt_text
     await db.commit()
     return prompt
 

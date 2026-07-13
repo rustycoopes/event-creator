@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import Event
 from app.models.processing_run import ProcessingRun, ProcessingRunStatus
+from app.models.storage_config import StorageConfig, StorageProviderType
 from app.services.user_settings import get_or_create_user_settings
 from tests.conftest import TokenFactory, create_host_user
 
@@ -244,3 +245,83 @@ async def test_reviewed_checkbox_hides_row_by_default_and_shows_with_show_review
         "/dashboard", cookies={"organizeme_auth": token}, params={"show_reviewed": "true"}
     )
     assert "Reviewed event" in shown.text
+
+
+async def test_sort_toggle_link_preserves_active_type_filter(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    user_id = await create_host_user(db_session)
+    run_id = await _make_run(db_session, user_id)
+    await _make_event(db_session, user_id, run_id)
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.get(
+        "/dashboard", cookies={"organizeme_auth": token}, params={"type": "Medical"}
+    )
+
+    assert "type=Medical" in response.text
+    assert "sort=asc" in response.text
+
+
+async def test_pagination_links_preserve_active_filters(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    user_id = await create_host_user(db_session)
+    run_id = await _make_run(db_session, user_id)
+    for i in range(55):
+        await _make_event(db_session, user_id, run_id, description=f"Medical event {i}")
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.get(
+        "/dashboard", cookies={"organizeme_auth": token}, params={"type": "Medical"}
+    )
+
+    assert "type=Medical" in response.text
+    assert "page=2" in response.text
+
+
+async def test_import_button_disabled_when_storage_not_connected(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    user_id = await create_host_user(db_session)
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.get("/dashboard", cookies={"organizeme_auth": token})
+
+    assert "driveConnected: false" in response.text
+
+
+async def test_import_button_enabled_when_storage_connected(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    user_id = await create_host_user(db_session)
+    db_session.add(
+        StorageConfig(
+            user_id=user_id,
+            provider=StorageProviderType.GOOGLE_DRIVE,
+            folder_path="/OrganizeMe/exports",
+            oauth_access_token="fake-access-token",
+        )
+    )
+    await db_session.commit()
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.get("/dashboard", cookies={"organizeme_auth": token})
+
+    assert "driveConnected: true" in response.text
+
+
+async def test_delete_button_is_gated_behind_confirm_modal(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    user_id = await create_host_user(db_session)
+    run_id = await _make_run(db_session, user_id)
+    await _make_event(db_session, user_id, run_id)
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.get("/dashboard", cookies={"organizeme_auth": token})
+
+    # The Delete button opens the confirm dialog rather than deleting directly - it must call
+    # openConfirm(), not confirmDelete(), on click.
+    assert "@click=\"openConfirm(" in response.text
+    assert "confirmDelete" in response.text

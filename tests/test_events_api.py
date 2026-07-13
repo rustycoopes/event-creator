@@ -240,6 +240,46 @@ async def test_free_text_search_matches_description(
     assert body["events"][0]["description"] == "Dentist appointment"
 
 
+async def test_free_text_search_matches_event_type(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    user_id = await create_host_user(db_session)
+    run_id = await _make_run(db_session, user_id)
+    await _make_event(db_session, user_id, run_id, type="Medical", description="A")
+    await _make_event(db_session, user_id, run_id, type="School", description="B")
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.get(
+        "/api/v1/events", cookies={"organizeme_auth": token}, params={"q": "medical"}
+    )
+
+    body = response.json()
+    assert body["total"] == 1
+    assert body["events"][0]["description"] == "A"
+
+
+async def test_free_text_search_matches_agreed_by(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    user_id = await create_host_user(db_session)
+    run_id = await _make_run(db_session, user_id)
+    await _make_event(
+        db_session, user_id, run_id, description="A", agreed_by=["Russ Cooper"]
+    )
+    await _make_event(
+        db_session, user_id, run_id, description="B", agreed_by=["Christine Cooper"]
+    )
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.get(
+        "/api/v1/events", cookies={"organizeme_auth": token}, params={"q": "Russ"}
+    )
+
+    body = response.json()
+    assert body["total"] == 1
+    assert body["events"][0]["description"] == "A"
+
+
 async def test_free_text_search_escapes_like_metacharacters(
     client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
 ) -> None:
@@ -388,6 +428,24 @@ async def test_patch_toggles_reviewed(
 
     assert response.status_code == 200
     assert response.json()["reviewed"] is True
+
+
+async def test_patch_can_unmark_reviewed(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    user_id = await create_host_user(db_session)
+    run_id = await _make_run(db_session, user_id)
+    event = await _make_event(db_session, user_id, run_id, reviewed=True)
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.patch(
+        f"/api/v1/events/{event.id}",
+        cookies={"organizeme_auth": token},
+        json={"reviewed": False},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["reviewed"] is False
 
 
 async def test_patch_returns_404_for_another_users_event(
