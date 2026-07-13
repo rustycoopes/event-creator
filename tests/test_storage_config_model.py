@@ -55,6 +55,24 @@ async def test_storage_config_is_unique_per_user(db_session: AsyncSession) -> No
         await db_session.flush()
 
 
+async def test_deleting_host_user_cascades_to_storage_config_row(db_session: AsyncSession) -> None:
+    user_id = await create_host_user(db_session)
+    db_session.add(
+        StorageConfig(user_id=user_id, provider=StorageProviderType.GOOGLE_DRIVE, folder_path="/x")
+    )
+    await db_session.flush()
+
+    await db_session.execute(text("DELETE FROM host.users WHERE id = :uid"), {"uid": user_id})
+    await db_session.flush()
+
+    result = await db_session.execute(
+        text("SELECT 1 FROM event_creator.storage_configs WHERE user_id = :uid").bindparams(
+            uid=user_id
+        )
+    )
+    assert result.first() is None
+
+
 async def test_storage_provider_enum_has_exactly_the_spec_labels(db_session: AsyncSession) -> None:
     labels = (
         await db_session.scalars(
