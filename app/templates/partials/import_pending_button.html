@@ -1,0 +1,52 @@
+{#
+  Shared "Import pending files" control - included on /dashboard so the API endpoint added in
+  Slice R8 (app.api.v1.import_pending_files) has a UI entry point. Requires `drive_connected` in
+  the including template's context, same flag app.pages.dashboard computes. Single-quoted x-data
+  so the double-quoted JS strings inside don't terminate the attribute.
+#}
+<div
+  x-data='{
+    importing: false,
+    error: "",
+    driveConnected: {{ drive_connected | tojson }},
+    async importPending() {
+      this.error = "";
+      this.importing = true;
+      try {
+        const response = await fetch("/api/v1/import-pending-files", { method: "POST" });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          this.error = this.messageFor(data.detail) || "Import failed. Please try again.";
+          this.importing = false;
+          return;
+        }
+        window.location = "/processing?run=" + encodeURIComponent(data.run_id);
+      } catch (e) {
+        this.error = "Import failed. Please try again.";
+        this.importing = false;
+      }
+    },
+    messageFor(detail) {
+      const map = {
+        storage_not_connected: "Connect a storage provider in Settings before importing.",
+        no_pending_files: "No pending files found in your storage watch folder.",
+        storage_error: "Could not reach your storage provider. Try reconnecting it in Settings, or try again in a moment.",
+      };
+      return map[detail];
+    },
+  }'
+>
+  <button
+    id="import-pending-files-btn"
+    type="button"
+    class="btn btn-outline btn-sm"
+    :disabled="importing || !driveConnected"
+    @click="importPending()"
+  >
+    <span x-show="!importing">Import pending files</span>
+    <span x-show="importing" x-cloak>Importing…</span>
+  </button>
+  <div role="alert" class="alert alert-error mt-2" x-show="error" x-cloak>
+    <span x-text="error"></span>
+  </div>
+</div>

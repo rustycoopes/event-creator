@@ -1,0 +1,166 @@
+{#
+  The events table + pagination fragment. Nested inside partials/dashboard_body.html, which is
+  the actual HTMX swap unit - pagination links here target #dashboard-body (not just this
+  fragment's own #events-panel wrapper) so the filter form's sort toggle/hidden field re-render
+  too and stay in sync with the page that was just navigated to.
+#}
+{% if total %}
+<p id="events-total-count" class="text-sm opacity-70" data-total="{{ total }}">{{ total }} event{{ "s" if total != 1 else "" }} total</p>
+{% endif %}
+
+{% if events %}
+{#
+  event.id is a server-generated UUID (hex digits + hyphens only), so embedding it directly in
+  a single-quoted JS string inside a double-quoted HTML attribute is safe - no user-controlled
+  text (like the description) is ever inlined into an onclick-style attribute here.
+#}
+<div
+  class="overflow-x-auto mt-2"
+  x-data='{
+    deleting: false,
+    error: "",
+    pendingId: null,
+    openConfirm(id) {
+      this.pendingId = id;
+      this.$refs.confirmModal.showModal();
+    },
+    async confirmDelete() {
+      this.deleting = true;
+      this.error = "";
+      try {
+        const response = await fetch("/api/v1/events/" + this.pendingId, { method: "DELETE" });
+        if (!response.ok) throw new Error("delete failed");
+        window.location.reload();
+      } catch (e) {
+        this.error = "Could not delete this event. Please try again.";
+        this.deleting = false;
+      }
+    },
+    async toggleReviewed(id, checked, checkbox) {
+      this.error = "";
+      try {
+        const response = await fetch("/api/v1/events/" + id, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reviewed: checked }),
+        });
+        if (!response.ok) throw new Error("update failed");
+        // Re-render #dashboard-body from the server instead of patching the DOM by hand: with
+        // "Show reviewed" off (the default) a just-reviewed row must disappear, which also shifts
+        // the count, pagination, and (if this was the last visible row) the empty-state message -
+        // all of which the existing HTMX swap (used by every other filter/sort/page control on
+        // this page) already gets right in one place.
+        htmx.ajax("GET", window.location.pathname + window.location.search, {
+          target: "#dashboard-body",
+          swap: "innerHTML",
+        });
+      } catch (e) {
+        checkbox.checked = !checked;
+        this.error = "Could not update this event. Please try again.";
+      }
+    },
+  }'
+>
+  <div role="alert" class="alert alert-error mb-2" x-show="error" x-cloak>
+    <span x-text="error"></span>
+  </div>
+
+  <table class="table" id="events-table">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+        <th>Resolved date</th>
+        <th>Raw date text</th>
+        <th>Agreed by</th>
+        <th>Calendar</th>
+        <th>Tasks</th>
+        <th>Reviewed</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for event in events %}
+      <tr>
+        <td>{{ event.type }}</td>
+        <td>{{ event.description }}</td>
+        <td>{{ event.resolved_date }}</td>
+        <td>{{ event.raw_date_text }}</td>
+        <td>
+          {% for name in event.agreed_by %}
+          <span class="badge badge-ghost mr-1" title="{{ name }}" tabindex="0">{{ name | to_initials }}</span>
+          {% endfor %}
+        </td>
+        <td>
+          {% if event.calendar_url %}
+          <a href="{{ event.calendar_url }}" target="_blank" rel="noopener" class="link link-primary">Add</a>
+          {% else %}
+          <span class="opacity-50 text-sm">No date</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if event.tasks_url %}
+          <a href="{{ event.tasks_url }}" target="_blank" rel="noopener" class="link link-primary">Add</a>
+          {% else %}
+          <span class="opacity-50 text-sm">No date</span>
+          {% endif %}
+        </td>
+        <td>
+          <input
+            type="checkbox"
+            class="checkbox checkbox-sm"
+            aria-label="Reviewed"
+            {% if event.reviewed %}checked{% endif %}
+            @change="toggleReviewed('{{ event.id }}', $event.target.checked, $event.target)"
+          />
+        </td>
+        <td>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline btn-error"
+            @click="openConfirm('{{ event.id }}')"
+          >
+            Delete
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <dialog class="modal" x-ref="confirmModal">
+    <div class="modal-box">
+      <h3 class="font-bold text-lg">Delete this event?</h3>
+      <p class="py-2">This cannot be undone.</p>
+      <div class="modal-action">
+        <form method="dialog" class="flex gap-2">
+          <button class="btn" :disabled="deleting">Cancel</button>
+          <button type="button" class="btn btn-error" :disabled="deleting" @click="confirmDelete">
+            <span x-show="!deleting">Delete</span>
+            <span x-show="deleting" x-cloak>Deleting...</span>
+          </button>
+        </form>
+      </div>
+    </div>
+  </dialog>
+</div>
+
+{% if total_pages > 1 %}
+<div class="flex justify-center items-center gap-2 mt-4">
+  {% if prev_url %}
+  <a href="{{ prev_url }}" hx-get="{{ prev_url }}" hx-target="#dashboard-body" hx-push-url="true" class="btn btn-sm">Previous</a>
+  {% endif %}
+  <span class="btn btn-sm btn-ghost no-animation">Page {{ page }} of {{ total_pages }}</span>
+  {% if next_url %}
+  <a href="{{ next_url }}" hx-get="{{ next_url }}" hx-target="#dashboard-body" hx-push-url="true" class="btn btn-sm">Next</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+{% if has_active_filters %}
+<p class="opacity-70 mt-2">No events match these filters.</p>
+{% else %}
+<p class="opacity-70 mt-2">No events yet. Upload a conversation to get started.</p>
+{% endif %}
+{% endif %}

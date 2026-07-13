@@ -3,7 +3,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.api.v1.events import router as events_router
 from app.api.v1.import_pending_files import router as import_pending_files_router
+from app.api.v1.llm_prompt import router as llm_prompt_router
 from app.api.v1.processing_runs import router as processing_runs_router
 from app.api.v1.storage_config import router as storage_config_router
 from app.api.v1.storage_dropbox import router as storage_dropbox_router
@@ -13,6 +15,7 @@ from app.api.v1.user_settings import router as user_settings_router
 from app.pages.dashboard import router as dashboard_router
 from app.pages.logs import router as logs_router
 from app.pages.processing import router as processing_router
+from app.pages.prompt import router as prompt_router
 from app.pages.settings_fragments import router as settings_fragments_router
 
 
@@ -29,6 +32,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(title="Event Creator", lifespan=lifespan)
 
 app.include_router(dashboard_router)
+app.include_router(prompt_router)
+app.include_router(events_router)
+app.include_router(llm_prompt_router)
 app.include_router(settings_fragments_router)
 app.include_router(storage_config_router)
 app.include_router(storage_google_drive_router)

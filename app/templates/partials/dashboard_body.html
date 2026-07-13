@@ -1,0 +1,75 @@
+{#
+  The filter form + events panel, as one HTMX swap unit. Both must refresh together: the sort
+  toggle link and the hidden "sort" field live in the form, so if only the table swapped,
+  filtering after a sort toggle (or vice versa) would submit a stale sort/filter value from a
+  form that never got re-rendered. Included by pages/dashboard.html for a normal full-page load,
+  and returned standalone by app.pages.dashboard for HTMX requests.
+#}
+<form
+  id="event-filters"
+  hx-get="/dashboard"
+  hx-target="#dashboard-body"
+  hx-push-url="true"
+  hx-trigger="change, keyup changed delay:500ms from:input[type='text']"
+  class="flex flex-wrap gap-2 items-end mt-2"
+>
+  {# Carries the current sort so a filter change doesn't reset it back to newest-first; the
+     sort toggle link below is the only thing that changes this value. #}
+  <input type="hidden" name="sort" value="{{ filters.sort }}" />
+
+  <div class="form-control">
+    <label class="label label-text text-xs" for="filter-type">Type</label>
+    <select id="filter-type" name="type" class="select select-bordered select-sm">
+      <option value="">All types</option>
+      {% for t in event_types %}
+      <option value="{{ t }}" {% if filters.type == t %}selected{% endif %}>{{ t }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="form-control">
+    <label class="label label-text text-xs" for="filter-date-from">From</label>
+    <input
+      id="filter-date-from" type="date" name="date_from" value="{{ filters.date_from }}"
+      class="input input-bordered input-sm"
+    />
+  </div>
+
+  <div class="form-control">
+    <label class="label label-text text-xs" for="filter-date-to">To</label>
+    <input
+      id="filter-date-to" type="date" name="date_to" value="{{ filters.date_to }}"
+      class="input input-bordered input-sm"
+    />
+  </div>
+
+  <div class="form-control grow min-w-[12rem]">
+    <label class="label label-text text-xs" for="filter-search">Search</label>
+    <input
+      id="filter-search" type="text" name="q" value="{{ filters.q }}"
+      placeholder="Search all fields..." class="input input-bordered input-sm w-full"
+    />
+  </div>
+
+  <div class="form-control">
+    <label class="label cursor-pointer gap-2" for="filter-show-reviewed">
+      <span class="label-text text-xs">Show reviewed</span>
+      <input
+        id="filter-show-reviewed" type="checkbox" name="show_reviewed" value="true"
+        class="checkbox checkbox-sm" {% if filters.show_reviewed %}checked{% endif %}
+      />
+    </label>
+  </div>
+
+  <a
+    href="{{ sort_toggle_url }}"
+    hx-get="{{ sort_toggle_url }}"
+    hx-target="#dashboard-body"
+    hx-push-url="true"
+    class="btn btn-sm"
+  >Sort: {{ "Newest first" if filters.sort == "desc" else "Oldest first" }}</a>
+</form>
+
+<div id="events-panel" class="mt-2">
+  {% include "partials/events_panel.html" %}
+</div>

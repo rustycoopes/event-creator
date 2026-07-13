@@ -1,0 +1,110 @@
+{% extends "chrome_authenticated_base.html" %}
+
+{% block title %}Prompt — Event Creator{% endblock %}
+
+{% block page %}
+<div class="flex justify-center">
+  <div class="card w-full max-w-3xl bg-base-100 shadow-xl">
+    <div class="card-body">
+      <h1 class="card-title">Extraction prompt</h1>
+      <p class="text-sm opacity-70">
+        This is the prompt Gemini uses to extract events from your WhatsApp exports. Edit it to
+        change what gets picked up, or reset it to the default at any time.
+      </p>
+
+      {#
+        Single-quoted x-data so the double-quoted JS strings inside don't terminate the attribute.
+        prompt_text is seeded from the server as JSON.
+      #}
+      <div
+        class="mt-2"
+        x-data='{
+          prompt_text: {{ prompt_text | tojson }},
+          saving: false,
+          resetting: false,
+          error: "",
+          successMessage: "",
+          async save() {
+            this.saving = true;
+            this.error = "";
+            this.successMessage = "";
+            try {
+              const response = await fetch("/api/v1/llm-prompt", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ prompt_text: this.prompt_text }),
+              });
+              if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+                const detail = Array.isArray(data.detail) ? data.detail[0]?.msg : data.detail;
+                this.error = detail || "Could not save the prompt. Please try again.";
+                return;
+              }
+              const data = await response.json();
+              this.prompt_text = data.prompt_text;
+              this.successMessage = "Prompt saved.";
+            } catch (e) {
+              this.error = "Could not save the prompt. Please try again.";
+            } finally {
+              this.saving = false;
+            }
+          },
+          async reset() {
+            this.resetting = true;
+            this.error = "";
+            this.successMessage = "";
+            try {
+              const response = await fetch("/api/v1/llm-prompt/reset", { method: "POST" });
+              if (!response.ok) throw new Error("reset failed");
+              const data = await response.json();
+              this.prompt_text = data.prompt_text;
+              this.successMessage = "Prompt reset to default.";
+            } catch (e) {
+              this.error = "Could not reset the prompt. Please try again.";
+            } finally {
+              this.resetting = false;
+            }
+          },
+        }'
+      >
+        <div role="alert" class="alert alert-success mt-2" x-show="successMessage" x-cloak>
+          <span x-text="successMessage"></span>
+        </div>
+        <div role="alert" class="alert alert-error mt-2" x-show="error" x-cloak>
+          <span x-text="error"></span>
+        </div>
+
+        <form class="flex flex-col gap-4 mt-4" @submit.prevent="save">
+          <label class="form-control w-full">
+            <div class="label"><span class="label-text">Prompt</span></div>
+            <textarea
+              id="prompt_text"
+              name="prompt_text"
+              x-model="prompt_text"
+              rows="18"
+              required
+              class="textarea textarea-bordered w-full font-mono text-sm leading-relaxed"
+            >{{ prompt_text }}</textarea>
+          </label>
+          <div class="flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-primary" :disabled="saving || resetting">
+              <span x-show="!saving">Save changes</span>
+              <span x-show="saving" x-cloak>Saving...</span>
+            </button>
+            <button
+              type="button"
+              id="reset-prompt"
+              class="btn btn-outline"
+              :disabled="saving || resetting"
+              @click="reset"
+            >
+              <span x-show="!resetting">Reset to default</span>
+              <span x-show="resetting" x-cloak>Resetting...</span>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

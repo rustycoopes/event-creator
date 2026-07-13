@@ -3,21 +3,25 @@ login/session logic of its own, and rejects/redirects everything else.
 """
 
 from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.conftest import TokenFactory
+from tests.conftest import TokenFactory, create_host_user
 
 
 async def test_valid_host_jwt_renders_the_dashboard_for_that_user(
-    client: AsyncClient, make_token: type[TokenFactory]
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
 ) -> None:
-    token = make_token.valid(sub="22222222-2222-2222-2222-222222222222")
+    # Since Slice R9, /dashboard reads/writes event_creator.user_settings (onboarding checklist),
+    # which FKs to host.users - unlike R6's tracer bullet, the JWT's sub must be a real host user.
+    user_id = await create_host_user(db_session)
+    token = make_token.valid(sub=str(user_id))
 
     response = await client.get(
         "/dashboard", cookies={"organizeme_auth": token}, follow_redirects=False
     )
 
     assert response.status_code == 200
-    assert "22222222-2222-2222-2222-222222222222" in response.text
+    assert "Dashboard" in response.text
 
 
 async def test_no_cookie_redirects_to_host_login(client: AsyncClient) -> None:
