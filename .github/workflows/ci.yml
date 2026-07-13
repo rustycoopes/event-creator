@@ -80,6 +80,12 @@ jobs:
       # `redis-url-qa` new in Slice R8, backing the Celery broker/backend for `app.worker` -
       # client secrets/connection strings don't belong in a plaintext env-vars-file readable via
       # `gcloud run services describe`, unlike the client *ids* below, which aren't confidential).
+      # NOTE: E2E_TEST_MODE=true is written here for QA ONLY (mirrors organize-me's own ci.yml).
+      # It makes `is_storage_connected`/`get_import_storage` (app/api/v1/storage_config.py,
+      # import_pending_files.py) treat every user as having a connected storage provider, so E2E
+      # (which never does real Drive/Dropbox OAuth, per organize-me's standing #23 decision) can
+      # exercise the "Import pending files" button - see issue #185. It must never appear in
+      # deploy.yml's prod env vars.
       - name: Write Cloud Run env vars file
         env:
           DATABASE_URL: ${{ secrets.SUPABASE_QA_URL }}
@@ -90,6 +96,7 @@ jobs:
           DATABASE_URL: "${DATABASE_URL}"
           GOOGLE_OAUTH_CLIENT_ID: "${GOOGLE_OAUTH_CLIENT_ID}"
           DROPBOX_OAUTH_CLIENT_ID: "${DROPBOX_OAUTH_CLIENT_ID}"
+          E2E_TEST_MODE: "true"
           EOF
 
       - name: Build image
