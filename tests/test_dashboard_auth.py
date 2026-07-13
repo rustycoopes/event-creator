@@ -17,7 +17,7 @@ async def test_valid_host_jwt_renders_the_dashboard_for_that_user(
     )
 
     assert response.status_code == 200
-    assert "22222222-2222-2222-2222-222222222222" in response.text
+    assert "Dashboard" in response.text
 
 
 async def test_no_cookie_redirects_to_host_login(client: AsyncClient) -> None:

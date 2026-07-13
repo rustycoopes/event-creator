@@ -1,12 +1,50 @@
 {% extends "chrome_authenticated_base.html" %}
 
-{% block title %}Dashboard — OrganizeMe{% endblock %}
+{% block title %}Dashboard — Event Creator{% endblock %}
+
+{% block head %}
+{# HTMX powers the filter/search/sort/pagination interactions below - narrowing the table swaps
+   #dashboard-body in place instead of a full page reload. #}
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@1.9.12/dist/htmx.min.js"></script>
+{% endblock %}
 
 {% block page %}
-<h1 class="text-2xl font-bold mb-4">Dashboard</h1>
-<p class="text-base-content/70">
-  Rendered by the independent Event Creator service for user <code>{{ user_id }}</code> — the
-  Slice R6 tracer bullet proving the Host↔Event Creator boundary. Real dashboard content lands in
-  a later parity slice.
-</p>
+{# Getting Started onboarding checklist. Shown above the events table until all three onboarding
+   steps are done, then hidden entirely. Steps and their done-state come from the server-rendered
+   onboarding_steps view-model (app/core/onboarding.py) - no live update needed; the state simply
+   reflects on the next page load. #}
+{% if not onboarding_complete %}
+<div class="card bg-base-100 shadow-xl mb-4" id="onboarding-checklist">
+  <div class="card-body">
+    <h2 class="card-title">Getting Started</h2>
+    <p class="text-sm opacity-70">Finish setting up Event Creator:</p>
+    <ul class="steps steps-vertical mt-2">
+      {% for step in onboarding_steps %}
+      <li class="step {% if step.done %}step-primary{% endif %}">
+        {% if step.done %}
+        {# sr-only state text: done/to-do is otherwise conveyed only visually (strike-through +
+           colour), which a screen reader can't perceive. #}
+        <span class="line-through opacity-70">{{ step.label }}<span class="sr-only"> (done)</span></span>
+        {% else %}
+        <a href="{{ step.url }}" class="link link-primary">{{ step.label }}<span class="sr-only"> (to do)</span></a>
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+  </div>
+</div>
+{% endif %}
+
+<div class="card bg-base-100 shadow-xl">
+  <div class="card-body">
+    <div class="flex items-center justify-between flex-wrap gap-2">
+      <h1 class="card-title">Dashboard</h1>
+      {% include "partials/import_pending_button.html" %}
+    </div>
+
+    <div id="dashboard-body">
+      {% include "partials/dashboard_body.html" %}
+    </div>
+  </div>
+</div>
 {% endblock %}
