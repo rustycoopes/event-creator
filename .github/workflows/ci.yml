@@ -92,6 +92,5 @@ jobs:
             --project=${{ env.GCP_PROJECT_ID }} \
             --env-vars-file=/tmp/cloud-run-env.yaml \
             --set-secrets=JWT_SECRET=jwt-secret-qa:latest \
-            --no-cpu-throttling \
             --allow-unauthenticated \
             --quiet
