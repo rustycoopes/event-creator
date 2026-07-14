@@ -17,6 +17,7 @@ from app.pages.logs import router as logs_router
 from app.pages.processing import router as processing_router
 from app.pages.prompt import router as prompt_router
 from app.pages.settings_fragments import router as settings_fragments_router
+from app.pages.upload import router as upload_page_router
 
 
 @asynccontextmanager
@@ -33,6 +34,7 @@ app = FastAPI(title="Event Creator", lifespan=lifespan)
 
 app.include_router(dashboard_router)
 app.include_router(prompt_router)
+app.include_router(upload_page_router)
 app.include_router(events_router)
 app.include_router(llm_prompt_router)
 app.include_router(settings_fragments_router)
