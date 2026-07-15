@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from app.api.v1.events import router as events_router
 from app.api.v1.import_pending_files import router as import_pending_files_router
+from app.api.v1.internal_pipeline import router as internal_pipeline_router
 from app.api.v1.llm_prompt import router as llm_prompt_router
 from app.api.v1.processing_runs import router as processing_runs_router
 from app.api.v1.storage_config import router as storage_config_router
@@ -47,6 +48,7 @@ app.include_router(import_pending_files_router)
 app.include_router(processing_runs_router)
 app.include_router(processing_router)
 app.include_router(logs_router)
+app.include_router(internal_pipeline_router)
 
 
 @app.get("/health")

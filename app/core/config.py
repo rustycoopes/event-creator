@@ -46,6 +46,20 @@ class Settings(BaseSettings):
     twilio_account_sid: str = ""
     twilio_auth_token: str = ""
     twilio_phone_number: str = ""
+    # Cloud Tasks dispatch (replaces Celery/Redis, see docs/adr/0001 in organize-me): the queue
+    # the pipeline is dispatched through, and the identity/URL Cloud Tasks uses to push tasks back
+    # to this same service's /internal/pipeline/run. All non-sensitive - plain Cloud Run env vars,
+    # not Secret Manager. Empty defaults mirror every other optional-until-wired field above; the
+    # dispatch code raises a clear error if it's actually used while unset.
+    gcp_project_id: str = ""
+    cloud_tasks_location: str = ""
+    cloud_tasks_queue: str = ""
+    pipeline_invoker_service_account: str = ""
+    # This service's own Cloud Run URL (its https://*.run.app address, captured at deploy time -
+    # see deploy.yml) - deliberately distinct from base_url above, which is the public shared LB
+    # domain. Cloud Tasks pushes directly to the Cloud Run URL, bypassing the LB, so the OIDC
+    # audience and the push target both need this service's real address, not the shared domain.
+    pipeline_endpoint_url: str = ""
 
 
 @lru_cache

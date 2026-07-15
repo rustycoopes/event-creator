@@ -2,9 +2,10 @@
 Slice 4.2/#53 to Event Creator in Slice R8).
 
 The pipeline (app.services.pipeline.runner) writes a ``processing_steps`` row per step as it
-advances (and flips the ``processing_runs`` status at the end) - whether it's driven by a Celery
-worker (this repo) or (historically) an in-process asyncio task. This module turns those rows into
-the stream of updates the browser's HTMX SSE extension consumes:
+advances (and flips the ``processing_runs`` status at the end) - whether it's driven by a Cloud
+Tasks push handler (this repo, Slice R11 redesign), a Celery worker (this repo's original Slice
+R8 design), or (historically, the monolith) an in-process asyncio task. This module turns those
+rows into the stream of updates the browser's HTMX SSE extension consumes:
 
 - :func:`build_step_views` maps the (possibly partial) set of step rows onto the canonical 7
   steps, defaulting a not-yet-started step to ``pending`` — a pure function, unit-tested.
@@ -12,9 +13,9 @@ the stream of updates the browser's HTMX SSE extension consumes:
   first paints *and* the SSE stream later swaps in, so both come from one template (no drift).
 - :func:`stream_run_progress` polls the run's rows on a short interval and yields an SSE event only
   when a step's status (or the run's status) actually changes, closing the stream with a ``done``
-  event once the run reaches a terminal state (``success``/``failed``). No Redis pub/sub for
-  progress itself (Celery only uses Redis as its broker/backend) - Postgres rows remain the source
-  of truth, so this keeps working unchanged regardless of which worker process ran the pipeline.
+  event once the run reaches a terminal state (``success``/``failed``). No pub/sub for progress
+  itself - Postgres rows remain the source of truth, so this keeps working unchanged regardless of
+  which mechanism dispatched the pipeline.
 """
 
 import asyncio

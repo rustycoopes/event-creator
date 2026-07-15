@@ -67,13 +67,19 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
 
-      # JWT_SECRET, ENCRYPTION_KEY, the two OAuth client *secrets*, and REDIS_URL are
-      # intentionally absent here: all five are wired below via --set-secrets from GCP Secret
-      # Manager (`jwt-secret-prod`, `encryption-key-prod` shared with the Host per R4/R6;
-      # `google-oauth-client-secret-prod`/`dropbox-oauth-client-secret-prod` new to this service;
-      # `redis-url-prod` new in Slice R8, backing the Celery broker/backend for `app.worker` -
-      # client secrets/connection strings don't belong in a plaintext env-vars-file readable via
-      # `gcloud run services describe`, unlike the client *ids* below, which aren't confidential).
+      # JWT_SECRET, ENCRYPTION_KEY, and the two OAuth client *secrets* are intentionally absent
+      # here: all four are wired below via --set-secrets from GCP Secret Manager (`jwt-secret-prod`,
+      # `encryption-key-prod` shared with the Host per R4/R6; `google-oauth-client-secret-prod`/
+      # `dropbox-oauth-client-secret-prod` new to this service - client secrets/connection strings
+      # don't belong in a plaintext env-vars-file readable via `gcloud run services describe`,
+      # unlike the client *ids* below, which aren't confidential).
+      #
+      # GCP_PROJECT_ID/CLOUD_TASKS_LOCATION/CLOUD_TASKS_QUEUE/PIPELINE_INVOKER_SERVICE_ACCOUNT
+      # (Slice R11 redesign, replacing REDIS_URL/Celery) are plaintext, non-sensitive config, same
+      # treatment as the other env vars below - see docs/adr/0001 in organize-me.
+      # PIPELINE_ENDPOINT_URL is deliberately NOT written here - it's this service's own Cloud Run
+      # URL, only known after the first deploy below, and is set via a follow-up
+      # `gcloud run services update` once that URL is captured.
       - name: Write Cloud Run env vars file
         env:
           DATABASE_URL: ${{ secrets.SUPABASE_PROD_URL }}
@@ -84,6 +90,10 @@ jobs:
           DATABASE_URL: "${DATABASE_URL}"
           GOOGLE_OAUTH_CLIENT_ID: "${GOOGLE_OAUTH_CLIENT_ID}"
           DROPBOX_OAUTH_CLIENT_ID: "${DROPBOX_OAUTH_CLIENT_ID}"
+          GCP_PROJECT_ID: "${{ env.GCP_PROJECT_ID }}"
+          CLOUD_TASKS_LOCATION: "${{ env.GCP_REGION }}"
+          CLOUD_TASKS_QUEUE: "event-creator-pipeline-prod"
+          PIPELINE_INVOKER_SERVICE_ACCOUNT: "170051512639-compute@developer.gserviceaccount.com"
           EOF
 
       - name: Build image
@@ -108,7 +118,21 @@ jobs:
             --region=${{ env.GCP_REGION }} \
             --project=${{ env.GCP_PROJECT_ID }} \
             --env-vars-file=/tmp/cloud-run-env.yaml \
-            --set-secrets=JWT_SECRET=jwt-secret-prod:latest,ENCRYPTION_KEY=encryption-key-prod:latest,GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret-prod:latest,DROPBOX_OAUTH_CLIENT_SECRET=dropbox-oauth-client-secret-prod:latest,REDIS_URL=redis-url-prod:latest \
+            --set-secrets=JWT_SECRET=jwt-secret-prod:latest,ENCRYPTION_KEY=encryption-key-prod:latest,GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret-prod:latest,DROPBOX_OAUTH_CLIENT_SECRET=dropbox-oauth-client-secret-prod:latest \
             --allow-unauthenticated \
             --timeout=3600 \
+            --quiet
+
+      # Cloud Tasks pushes directly to this service's own https://*.run.app URL (Slice R11
+      # redesign) - that URL isn't known until after the deploy above, so PIPELINE_ENDPOINT_URL
+      # is set in a follow-up update rather than the main env-vars-file. Idempotent/cheap: just
+      # updates one env var on the revision that was already deployed, no rebuild.
+      - name: Wire this service's own URL for Cloud Tasks push targets
+        run: |
+          SERVICE_URL=$(gcloud run services describe event-creator-prod \
+            --region=${{ env.GCP_REGION }} --project=${{ env.GCP_PROJECT_ID }} \
+            --format='value(status.url)')
+          gcloud run services update event-creator-prod \
+            --region=${{ env.GCP_REGION }} --project=${{ env.GCP_PROJECT_ID }} \
+            --update-env-vars=PIPELINE_ENDPOINT_URL="${SERVICE_URL}" \
             --quiet

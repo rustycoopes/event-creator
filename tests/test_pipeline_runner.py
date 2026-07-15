@@ -4,9 +4,8 @@ Creator in Slice R8).
 Drives ``run_pipeline`` directly (awaited) with a ``FakeStorageProvider`` + fake Gemini + fake
 notifier, against the rolled-back QA ``db_session`` fixture, and asserts events land in the DB and
 the run/steps/file-movement/notification all reflect the outcome. This exercises the pipeline logic
-itself, independent of the Celery task/worker wrapper that dispatches it in production (see
-test_worker.py for the task-layer's own responsibilities: reconstructing collaborators from
-serialisable ids).
+itself, independent of the dispatch layer that invokes it in production (see test_dispatch.py for
+that layer's own responsibilities: reconstructing collaborators from serialisable ids).
 """
 
 import io
