@@ -73,13 +73,20 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
 
-      # JWT_SECRET, ENCRYPTION_KEY, the two OAuth client *secrets*, and REDIS_URL are
-      # intentionally absent here: all five are wired below via --set-secrets from GCP Secret
-      # Manager (`jwt-secret-qa`, `encryption-key-qa` shared with the Host per R4/R6;
-      # `google-oauth-client-secret-qa`/`dropbox-oauth-client-secret-qa` new to this service;
-      # `redis-url-qa` new in Slice R8, backing the Celery broker/backend for `app.worker` -
-      # client secrets/connection strings don't belong in a plaintext env-vars-file readable via
-      # `gcloud run services describe`, unlike the client *ids* below, which aren't confidential).
+      # JWT_SECRET, ENCRYPTION_KEY, and the two OAuth client *secrets* are intentionally absent
+      # here: all four are wired below via --set-secrets from GCP Secret Manager (`jwt-secret-qa`,
+      # `encryption-key-qa` shared with the Host per R4/R6; `google-oauth-client-secret-qa`/
+      # `dropbox-oauth-client-secret-qa` new to this service - client secrets/connection strings
+      # don't belong in a plaintext env-vars-file readable via `gcloud run services describe`,
+      # unlike the client *ids* below, which aren't confidential).
+      #
+      # GCP_PROJECT_ID/CLOUD_TASKS_LOCATION/CLOUD_TASKS_QUEUE/PIPELINE_INVOKER_SERVICE_ACCOUNT
+      # (Slice R11 redesign, replacing REDIS_URL/Celery) are plaintext, non-sensitive config, same
+      # treatment as the other env vars below - see docs/adr/0001 in organize-me.
+      # PIPELINE_ENDPOINT_URL is deliberately NOT written here - it's this service's own Cloud Run
+      # URL, only known after the first deploy below, and is set via a follow-up
+      # `gcloud run services update` once that URL is captured.
+      #
       # NOTE: E2E_TEST_MODE=true is written here for QA ONLY (mirrors organize-me's own ci.yml).
       # It makes `is_storage_connected`/`get_import_storage` (app/api/v1/storage_config.py,
       # import_pending_files.py) treat every user as having a connected storage provider, so E2E
@@ -97,6 +104,10 @@ jobs:
           GOOGLE_OAUTH_CLIENT_ID: "${GOOGLE_OAUTH_CLIENT_ID}"
           DROPBOX_OAUTH_CLIENT_ID: "${DROPBOX_OAUTH_CLIENT_ID}"
           E2E_TEST_MODE: "true"
+          GCP_PROJECT_ID: "${{ env.GCP_PROJECT_ID }}"
+          CLOUD_TASKS_LOCATION: "${{ env.GCP_REGION }}"
+          CLOUD_TASKS_QUEUE: "event-creator-pipeline-qa"
+          PIPELINE_INVOKER_SERVICE_ACCOUNT: "170051512639-compute@developer.gserviceaccount.com"
           EOF
 
       - name: Build image
@@ -116,14 +127,33 @@ jobs:
           # --timeout=3600 (Cloud Run's max): the live SSE processing-progress stream
           # (GET /api/v1/processing-runs/{id}/sse, Slice R8) is a long-held request for the life
           # of a run - the default ~300s timeout would cut it off mid-stream on a slow run.
+          #
+          # No --no-cpu-throttling here (Slice R11 redesign): the ADR's experimental flag on QA
+          # is being reverted as part of this change - Cloud Tasks push dispatch means nothing on
+          # this service needs CPU-always-allocated anymore. See docs/adr/0001 in organize-me.
           gcloud run deploy event-creator-qa \
             --image=${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
             --region=${{ env.GCP_REGION }} \
             --project=${{ env.GCP_PROJECT_ID }} \
             --env-vars-file=/tmp/cloud-run-env.yaml \
-            --set-secrets=JWT_SECRET=jwt-secret-qa:latest,ENCRYPTION_KEY=encryption-key-qa:latest,GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret-qa:latest,DROPBOX_OAUTH_CLIENT_SECRET=dropbox-oauth-client-secret-qa:latest,REDIS_URL=redis-url-qa:latest \
+            --set-secrets=JWT_SECRET=jwt-secret-qa:latest,ENCRYPTION_KEY=encryption-key-qa:latest,GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret-qa:latest,DROPBOX_OAUTH_CLIENT_SECRET=dropbox-oauth-client-secret-qa:latest \
             --allow-unauthenticated \
             --timeout=3600 \
+            --cpu-throttling \
+            --quiet
+
+      # Cloud Tasks pushes directly to this service's own https://*.run.app URL (Slice R11
+      # redesign) - that URL isn't known until after the deploy above, so PIPELINE_ENDPOINT_URL
+      # is set in a follow-up update rather than the main env-vars-file. Idempotent/cheap: just
+      # updates one env var on the revision that was already deployed, no rebuild.
+      - name: Wire this service's own URL for Cloud Tasks push targets
+        run: |
+          SERVICE_URL=$(gcloud run services describe event-creator-qa \
+            --region=${{ env.GCP_REGION }} --project=${{ env.GCP_PROJECT_ID }} \
+            --format='value(status.url)')
+          gcloud run services update event-creator-qa \
+            --region=${{ env.GCP_REGION }} --project=${{ env.GCP_PROJECT_ID }} \
+            --update-env-vars=PIPELINE_ENDPOINT_URL="${SERVICE_URL}" \
             --quiet
 
   e2e-boundary-qa:

@@ -2,16 +2,16 @@
 Slice R8).
 
 Turns one uploaded/detected file into extracted ``events`` rows. In the monolith this ran
-in-process as a plain asyncio task; here it runs as the body of a Celery task (see
-``app.worker``), invoked with its own DB session - state still lives entirely in Postgres via the
-``processing_runs`` / ``processing_steps`` / ``events`` rows this writes as it goes, so the SSE
-progress page can watch a run advance by polling those rows regardless of which process is driving
-it.
+in-process as a plain asyncio task; here it runs inside the request handling a Cloud Tasks push
+(see ``app.services.pipeline.dispatch``), invoked with its own DB session - state still lives
+entirely in Postgres via the ``processing_runs`` / ``processing_steps`` / ``events`` rows this
+writes as it goes, so the SSE progress page can watch a run advance by polling those rows
+regardless of which process is driving it.
 
 ``run_pipeline`` is deliberately pure and fully injected - it takes the DB session and its
 collaborators (storage, Gemini, notifier) as arguments rather than resolving them from globals - so
 the integration test drives the whole thing with a ``FakeStorageProvider`` + ``FakeGeminiClient``
-and asserts events land in the DB. The Celery task (app.worker) wires the real collaborators.
+and asserts events land in the DB. ``app.services.pipeline.dispatch`` wires the real collaborators.
 
 The 7 steps: (1) File Received, (2) Extract, (3) Filter by Date, (4) Call Gemini, (5) Parse LLM
 Response, (6) Deduplicate & Save, (7) Notify. Per the Slice 4 spec the Gemini step is fatal on
@@ -289,8 +289,8 @@ async def run_pipeline(
     """Execute the full 7-step pipeline for ``run``, writing steps + events as it goes.
 
     Never raises for an expected failure (bad archive, Gemini error, unparseable response): those
-    mark the run ``failed`` and return. Intended to be awaited directly in tests and run inside a
-    Celery task in production."""
+    mark the run ``failed`` and return. Intended to be awaited directly in tests and run inside
+    the Cloud Tasks push handler in production."""
     run.status = ProcessingRunStatus.IN_PROGRESS
     run.started_at = _utcnow()
     await session.commit()

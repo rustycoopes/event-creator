@@ -4,9 +4,11 @@ Creator in Slice R8).
 ``POST /api/v1/import-pending-files`` scans the user's connected storage watch folder for files
 not yet processed (``StorageProvider.list_new_files`` already excludes ``processed/``/``failed/``
 by contract - no separate dedup bookkeeping needed), creates one ``processing_runs`` row per file,
-and dispatches them as a Celery ``chain`` (``PipelineScheduler.schedule_batch`` in
+and dispatches them as a batch of Cloud Tasks tasks (``PipelineScheduler.schedule_batch`` in
 ``app.api.v1.upload``) so they run **sequentially** - one file's pipeline run finishing before the
-next starts - unlike the manual-upload path, which dispatches one independent task per upload.
+next starts, enforced by the queue's ``max-concurrent-dispatches=1`` setting (see
+``infra/cloud_tasks/provision.sh``) - unlike the manual-upload path, which dispatches one
+independent task per upload.
 
 The endpoint returns only the first run's id, so the client follows it to ``/processing`` exactly
 like a manual upload; any further files in the batch keep processing in the background and are
@@ -36,6 +38,7 @@ from app.db.session import get_db
 from app.models.processing_run import ProcessingRun, ProcessingRunStatus
 from app.services.llm.gemini import GeminiClient, get_gemini_client
 from app.services.notifications.pipeline import NotificationSender, get_pipeline_notifier
+from app.services.pipeline.dispatch import mark_runs_failed_to_schedule
 from app.services.storage.base import StorageProvider
 from app.services.storage.dropbox import DropboxError
 from app.services.storage.factory import build_storage_provider
@@ -104,12 +107,25 @@ async def import_pending_files(
     await mark_first_upload_onboarding_done(db, user_id)
 
     prompt_text = await _prompt_text_for(db, user_id)
-    await scheduler.schedule_batch(
-        runs=list(zip((run.id for run in runs), pending_files, strict=True)),
-        user_id=user_id,
-        storage=storage,
-        gemini=gemini,
-        notifier=notifier,
-        prompt_text=prompt_text,
-    )
+    try:
+        await scheduler.schedule_batch(
+            runs=list(zip((run.id for run in runs), pending_files, strict=True)),
+            user_id=user_id,
+            storage=storage,
+            gemini=gemini,
+            notifier=notifier,
+            prompt_text=prompt_text,
+        )
+    except Exception:
+        # The run rows are already committed at this point - if enqueuing the batch's Cloud Tasks
+        # task itself fails (quota, a transient gRPC error, IAM misconfigured before
+        # infra/cloud_tasks/provision.sh has run in a fresh environment), every one of them would
+        # otherwise sit at PENDING forever with nothing left to ever pick them up.
+        logger.exception("import-pending-files: failed to schedule batch for user %s", user_id)
+        await mark_runs_failed_to_schedule(
+            [run.id for run in runs], user_id, "Could not start processing. Please try again."
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail="dispatch_error"
+        ) from None
     return {"run_id": str(runs[0].id)}

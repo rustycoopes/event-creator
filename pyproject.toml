@@ -9,7 +9,15 @@ dependencies = [
     "uvicorn[standard]>=0.32",
     "jinja2>=3.1",
     "python-multipart>=0.0.12",
-    "celery[redis]>=5.4",
+    "google-cloud-tasks>=2.16",
+    "google-auth>=2.35",
+    # Caches the OIDC-verification cert fetch (app.api.v1.internal_pipeline) - google-auth's own
+    # docs note verify_oauth2_token re-fetches Google's public certs on every call otherwise,
+    # which would mean one extra network round trip per pipeline dispatch. `requests` backs the
+    # session cachecontrol wraps (google.auth.transport.requests already depends on it
+    # transitively, declared directly here since app code now imports it too).
+    "cachecontrol>=0.14",
+    "requests>=2.32",
     "sqlalchemy[asyncio]>=2.0",
     "asyncpg>=0.31.0",
     "alembic>=1.18.5",

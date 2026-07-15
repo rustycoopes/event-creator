@@ -1,16 +1,17 @@
 """Manual file upload -> processing pipeline (ported from organize-me's Slice 4.1/#52 to Event
-Creator in Slice R8).
+Creator in Slice R8; dispatch switched from Celery to Cloud Tasks per
+docs/adr/0001-event-creator-worker-cpu-throttling.md in organize-me).
 
 ``POST /api/v1/upload`` accepts a ``.txt`` / ``.zip`` / ``.csv`` export, writes it into the user's
 connected storage watch folder (or an ephemeral in-memory fallback, issue #79), records a
-``processing_runs`` row, and dispatches the 7-step pipeline as a **Celery task** (unlike the
-monolith, which never turned its worker on - see ``app.worker``). The client then navigates to the
-progress page to watch the run advance via SSE.
+``processing_runs`` row, and dispatches the 7-step pipeline as a **Cloud Tasks push task** -
+targeting this same service's ``POST /internal/pipeline/run`` (``app.api.v1.internal_pipeline``).
+The client then navigates to the progress page to watch the run advance via SSE.
 
 Every external collaborator is an overridable dependency (storage provider, Gemini client,
-notifier, and the scheduler that dispatches the Celery task) so the endpoint's own logic - gating,
-validation, run creation, the onboarding flip - is unit-testable while the full pipeline behaviour
-is covered directly in tests against ``app.services.pipeline.runner.run_pipeline``.
+notifier, and the scheduler that dispatches the Cloud Tasks task) so the endpoint's own logic -
+gating, validation, run creation, the onboarding flip - is unit-testable while the full pipeline
+behaviour is covered directly in tests against ``app.services.pipeline.runner.run_pipeline``.
 """
 
 import base64
@@ -33,6 +34,8 @@ from app.models.llm_prompt import LLMPrompt
 from app.models.processing_run import ProcessingRun, ProcessingRunStatus
 from app.services.llm.gemini import GeminiClient, get_gemini_client
 from app.services.notifications.pipeline import NotificationSender, get_pipeline_notifier
+from app.services.pipeline.cloud_tasks import enqueue_pipeline_run
+from app.services.pipeline.dispatch import mark_runs_failed_to_schedule
 from app.services.storage.base import RemoteFile, StorageProvider
 from app.services.storage.dropbox import DropboxError
 from app.services.storage.ephemeral import EphemeralStorageProvider
@@ -40,7 +43,6 @@ from app.services.storage.factory import build_storage_provider
 from app.services.storage.fake import FakeStorageProvider
 from app.services.storage.google_drive import GoogleDriveError
 from app.services.user_settings import mark_first_upload_onboarding_done
-from app.worker import run_pipeline_task
 
 logger = logging.getLogger(__name__)
 
@@ -79,10 +81,10 @@ async def get_upload_storage(
 
 
 def _storage_mode(storage: StorageProvider) -> str:
-    """Which reconstruction strategy ``app.worker.run_pipeline_task`` should use for this
+    """Which reconstruction strategy ``app.services.pipeline.dispatch`` should use for this
     provider - see that module's docstring. Ephemeral/fake providers hold their files purely
-    in-memory, so they can't be reconstructed by the (separate-process) Celery worker from a
-    persisted config the way a real Drive/Dropbox/S3 provider can."""
+    in-memory, so they can't be reconstructed by the push endpoint (a different request from the
+    one that created them) from a persisted config the way a real Drive/Dropbox/S3 provider can."""
     if isinstance(storage, FakeStorageProvider):
         return "fake"
     if isinstance(storage, EphemeralStorageProvider):
@@ -121,14 +123,48 @@ class PipelineScheduler(Protocol):
         ...
 
 
-class CeleryPipelineScheduler:
-    """Dispatches ``app.worker.run_pipeline_task`` to the Celery worker (Slice R8).
+def _build_dispatch_payload(
+    *,
+    run_id: uuid.UUID,
+    user_id: uuid.UUID,
+    remote_file: RemoteFile,
+    mode: str,
+    inline_b64: str | None,
+    prompt_text: str,
+    remaining_batch: list[dict[str, object]],
+) -> dict[str, object]:
+    """The JSON body shape ``app.api.v1.internal_pipeline.PipelineDispatchPayload`` parses."""
+    return {
+        "run_id": str(run_id),
+        "user_id": str(user_id),
+        "remote_file_id": remote_file.id,
+        "remote_file_name": remote_file.name,
+        "prompt_text": prompt_text,
+        "storage_mode": mode,
+        "inline_content_b64": inline_b64,
+        "remaining_batch": remaining_batch,
+    }
+
+
+class CloudTasksPipelineScheduler:
+    """Dispatches to ``POST /internal/pipeline/run`` (``app.api.v1.internal_pipeline``) via a
+    Cloud Tasks push task (Slice R11 redesign, replacing Celery - see
+    docs/adr/0001-event-creator-worker-cpu-throttling.md in organize-me).
 
     ``gemini``/``notifier`` are accepted only to satisfy the ``PipelineScheduler`` Protocol (kept
-    symmetric with the pre-Celery monolith signature, and so a test double can still assert on
-    what was passed in); the task itself always resolves its own collaborators fresh via
-    ``get_gemini_client()``/``get_pipeline_notifier()`` inside the worker process, since a live
-    client/sender object can't cross the Redis-brokered process boundary.
+    symmetric with the original signature, and so a test double can still assert on what was
+    passed in); the push endpoint always resolves its own collaborators fresh via
+    ``get_gemini_client()``/``get_pipeline_notifier()``, since a live client/sender object can't
+    cross the Cloud-Tasks-brokered process boundary.
+
+    A batch's "sequential, not concurrent" requirement (organize-me's #110) is met by explicit
+    chaining, not by the queue's own concurrency setting: Cloud Tasks documents dispatch order as
+    best-effort by schedule time, not a guarantee, and a retry on an earlier item (well within
+    normal operation - see ``infra/cloud_tasks/provision.sh``'s ``max-attempts``) can let a later
+    item's task become eligible first even under ``max-concurrent-dispatches=1``. So only the
+    *first* item of a batch is enqueued here; each item carries the rest of the batch
+    (``remaining_batch``) in its own payload, and ``app.api.v1.internal_pipeline`` enqueues the
+    next item itself once the current one finishes - see that module's docstring.
     """
 
     async def schedule(
@@ -142,12 +178,17 @@ class CeleryPipelineScheduler:
         notifier: NotificationSender,
         prompt_text: str,
     ) -> None:
-        await self._dispatch_one(
-            run_id=run_id,
-            user_id=user_id,
-            remote_file=remote_file,
-            storage=storage,
-            prompt_text=prompt_text,
+        mode, inline_b64 = await self._storage_payload_fields(storage, remote_file)
+        await enqueue_pipeline_run(
+            _build_dispatch_payload(
+                run_id=run_id,
+                user_id=user_id,
+                remote_file=remote_file,
+                mode=mode,
+                inline_b64=inline_b64,
+                prompt_text=prompt_text,
+                remaining_batch=[],
+            )
         )
         await storage.aclose()
 
@@ -161,61 +202,47 @@ class CeleryPipelineScheduler:
         notifier: NotificationSender,
         prompt_text: str,
     ) -> None:
-        # A Celery `chain` runs its signatures one after another (never concurrently), preserving
-        # the "sequential, not parallel" behaviour organize-me's #110 chose - whether the chain
-        # lands on one worker or several.
-        from celery import chain  # type: ignore[import-untyped]
+        if not runs:  # pragma: no cover - callers only invoke this with a non-empty batch
+            await storage.aclose()
+            return
 
-        signatures = []
+        mode = _storage_mode(storage)
+        # All items in a batch share the one storage provider passed in, so mode is constant
+        # across the batch - only each item's own inline content (fake/ephemeral) differs.
+        items = []
         for run_id, remote_file in runs:
-            mode = _storage_mode(storage)
-            inline_b64 = None
-            if mode in ("fake", "ephemeral"):
-                content = await storage.download_file(remote_file)
-                inline_b64 = base64.b64encode(content).decode()
-            signatures.append(
-                run_pipeline_task.si(
-                    run_id=str(run_id),
-                    user_id=str(user_id),
-                    remote_file_id=remote_file.id,
-                    remote_file_name=remote_file.name,
+            _, inline_b64 = await self._storage_payload_fields(storage, remote_file, mode=mode)
+            items.append(
+                _build_dispatch_payload(
+                    run_id=run_id,
+                    user_id=user_id,
+                    remote_file=remote_file,
+                    mode=mode,
+                    inline_b64=inline_b64,
                     prompt_text=prompt_text,
-                    storage_mode=mode,
-                    inline_content_b64=inline_b64,
+                    remaining_batch=[],
                 )
             )
-        if signatures:
-            chain(*signatures).apply_async()
+        # Only the first item is enqueued directly; it carries the rest as remaining_batch, and
+        # the push endpoint chains through them one at a time (see this class's docstring).
+        first, *rest = items
+        first["remaining_batch"] = rest
+        await enqueue_pipeline_run(first)
         await storage.aclose()
 
-    async def _dispatch_one(
-        self,
-        *,
-        run_id: uuid.UUID,
-        user_id: uuid.UUID,
-        remote_file: RemoteFile,
-        storage: StorageProvider,
-        prompt_text: str,
-    ) -> None:
-        mode = _storage_mode(storage)
-        inline_b64 = None
-        if mode in ("fake", "ephemeral"):
-            content = await storage.download_file(remote_file)
-            inline_b64 = base64.b64encode(content).decode()
-        run_pipeline_task.delay(
-            run_id=str(run_id),
-            user_id=str(user_id),
-            remote_file_id=remote_file.id,
-            remote_file_name=remote_file.name,
-            prompt_text=prompt_text,
-            storage_mode=mode,
-            inline_content_b64=inline_b64,
-        )
+    async def _storage_payload_fields(
+        self, storage: StorageProvider, remote_file: RemoteFile, *, mode: str | None = None
+    ) -> tuple[str, str | None]:
+        mode = mode if mode is not None else _storage_mode(storage)
+        if mode not in ("fake", "ephemeral"):
+            return mode, None
+        content = await storage.download_file(remote_file)
+        return mode, base64.b64encode(content).decode()
 
 
 def get_pipeline_scheduler() -> PipelineScheduler:
     """Return the production scheduler. Overridable in tests."""
-    return CeleryPipelineScheduler()
+    return CloudTasksPipelineScheduler()
 
 
 async def _prompt_text_for(db: AsyncSession, user_id: uuid.UUID) -> str:
@@ -271,13 +298,26 @@ async def upload_file(
     await db.refresh(run)
 
     prompt_text = await _prompt_text_for(db, user_id)
-    await scheduler.schedule(
-        run_id=run.id,
-        user_id=user_id,
-        remote_file=remote_file,
-        storage=storage,
-        gemini=gemini,
-        notifier=notifier,
-        prompt_text=prompt_text,
-    )
+    try:
+        await scheduler.schedule(
+            run_id=run.id,
+            user_id=user_id,
+            remote_file=remote_file,
+            storage=storage,
+            gemini=gemini,
+            notifier=notifier,
+            prompt_text=prompt_text,
+        )
+    except Exception:
+        # The run row is already committed at this point - if enqueuing its Cloud Tasks task
+        # itself fails (quota, a transient gRPC error, IAM misconfigured before
+        # infra/cloud_tasks/provision.sh has run in a fresh environment), it would otherwise sit
+        # at PENDING forever with nothing left to ever pick it up.
+        logger.exception("upload: failed to schedule pipeline for run %s", run.id)
+        await mark_runs_failed_to_schedule(
+            [run.id], user_id, "Could not start processing. Please try again."
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail="dispatch_error"
+        ) from None
     return {"run_id": str(run.id)}
