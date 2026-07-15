@@ -181,6 +181,73 @@ async def test_auth_returns_google_consent_url_with_correct_params(
     )
 
 
+async def test_auth_builds_redirect_uri_from_configured_setting_not_request_host(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """Regression test for issue #200: Google rejects a redirect_uri with
+    `Error 400: redirect_uri_mismatch` whenever it doesn't exactly match a URI registered on the
+    OAuth client. Deriving it from the incoming request's Host header (`request.base_url`) meant
+    the value silently changed whenever the LB domain or backend service changed - the fix is to
+    build it from the fixed, per-environment `GOOGLE_DRIVE_REDIRECT_URI` setting instead, which
+    matches whatever was actually registered in Google Cloud Console. The test client's Host header
+    is `testserver`, so if this ever regresses back to deriving from the request, the assertion
+    below (which pins the exact configured value) fails."""
+    from app.main import app
+
+    _, cookies = await _user_with_config(db_session, make_token)
+    await client.put(
+        "/api/v1/storage-config",
+        json={"provider": "google_drive", "folder_path": "/OrganizeMe"},
+        cookies=cookies,
+    )
+
+    app.dependency_overrides[get_cipher_factory] = lambda: (lambda: _CIPHER)
+    try:
+        response = await client.post(
+            "/api/v1/storage-config/google-drive/auth", cookies=cookies
+        )
+    finally:
+        app.dependency_overrides.pop(get_cipher_factory, None)
+
+    assert response.status_code == 200
+    url = response.json()["authorization_url"]
+    query = parse_qs(urlparse(url).query)
+    settings = get_settings()
+    assert query["redirect_uri"][0] == settings.google_drive_redirect_uri
+    assert "testserver" not in query["redirect_uri"][0]
+
+
+async def test_auth_fails_fast_when_redirect_uri_not_configured(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """Regression test: a missing GOOGLE_DRIVE_REDIRECT_URI should be caught in /auth, before
+    sending the user through the whole Google consent flow only to have Google reject it."""
+    from app.main import app
+
+    _, cookies = await _user_with_config(db_session, make_token)
+    await client.put(
+        "/api/v1/storage-config",
+        json={"provider": "google_drive", "folder_path": "/OrganizeMe"},
+        cookies=cookies,
+    )
+
+    app.dependency_overrides[get_cipher_factory] = lambda: (lambda: _CIPHER)
+    get_settings.cache_clear()
+    try:
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setenv("GOOGLE_DRIVE_REDIRECT_URI", "")
+            get_settings.cache_clear()
+            response = await client.post(
+                "/api/v1/storage-config/google-drive/auth", cookies=cookies
+            )
+    finally:
+        app.dependency_overrides.pop(get_cipher_factory, None)
+        get_settings.cache_clear()
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "storage_not_configured"
+
+
 async def test_auth_requires_a_saved_config_first(
     client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
 ) -> None:

@@ -20,6 +20,9 @@ jobs:
       # See ci.yml's test job for why these are here - same reasoning, prod secrets instead of QA.
       GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
       GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      # Fixed per-environment value (issue #200), not a secret - must match what's registered on
+      # the Google OAuth client in Google Cloud Console.
+      GOOGLE_DRIVE_REDIRECT_URI: https://organizeme.russcoopersoftware.com/api/v1/storage-config/google-drive/callback
       DROPBOX_OAUTH_CLIENT_ID: ${{ secrets.DROPBOX_OAUTH_CLIENT_ID }}
       DROPBOX_OAUTH_CLIENT_SECRET: ${{ secrets.DROPBOX_OAUTH_CLIENT_SECRET }}
       ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
@@ -89,6 +92,7 @@ jobs:
           cat > /tmp/cloud-run-env.yaml <<EOF
           DATABASE_URL: "${DATABASE_URL}"
           GOOGLE_OAUTH_CLIENT_ID: "${GOOGLE_OAUTH_CLIENT_ID}"
+          GOOGLE_DRIVE_REDIRECT_URI: "https://organizeme.russcoopersoftware.com/api/v1/storage-config/google-drive/callback"
           DROPBOX_OAUTH_CLIENT_ID: "${DROPBOX_OAUTH_CLIENT_ID}"
           GCP_PROJECT_ID: "${{ env.GCP_PROJECT_ID }}"
           CLOUD_TASKS_LOCATION: "${{ env.GCP_REGION }}"

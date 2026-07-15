@@ -34,7 +34,7 @@ from datetime import datetime, timezone
 
 import httpx
 import jwt as pyjwt
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Query, Response, status
 from fastapi.responses import RedirectResponse
 from fastapi_users.jwt import decode_jwt, generate_jwt
 from httpx_oauth.clients.google import GoogleOAuth2
@@ -96,16 +96,17 @@ def get_token_revoker() -> Callable[[str], Awaitable[None]]:
     return revoke_google_token
 
 
-def _drive_redirect_uri(request: Request) -> str:
-    """The absolute callback URL, built from the incoming request's host so it's correct on both
-    the QA and prod Cloud Run domains without a separate per-environment setting. Must exactly
-    match a redirect URI registered on the Google OAuth client."""
-    return str(request.base_url).rstrip("/") + DRIVE_CALLBACK_PATH
+def _drive_redirect_uri() -> str:
+    """The absolute callback URL Google redirects back to. Fixed per environment via
+    GOOGLE_DRIVE_REDIRECT_URI (issue #200) rather than derived from the incoming request's Host
+    header - the latter silently changed on every load-balancer/service-boundary shuffle and only
+    matches Google's registered redirect URI by coincidence. Must exactly match a redirect URI
+    registered on the Google OAuth client."""
+    return get_settings().google_drive_redirect_uri
 
 
 @router.post("/auth")
 async def google_drive_authorize(
-    request: Request,
     response: Response,
     user_id: uuid.UUID = Depends(current_user_id),
     db: AsyncSession = Depends(get_db),
@@ -130,6 +131,19 @@ async def google_drive_authorize(
         ) from exc
 
     settings = get_settings()
+    # Same fail-fast reasoning as the cipher check above (issue #200): a misconfigured deployment
+    # must not send the user through Google's consent screen only to have Google reject the
+    # request. The endswith check also catches a redirect_uri pointed at the wrong path (e.g. a
+    # copy-paste from the login flow's callback) - either way Google would reject it.
+    if not settings.google_drive_redirect_uri.endswith(DRIVE_CALLBACK_PATH):
+        logger.error(
+            "Cannot start Google Drive connect: GOOGLE_DRIVE_REDIRECT_URI is not set to a URL "
+            "ending in %s",
+            DRIVE_CALLBACK_PATH,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="storage_not_configured"
+        )
     csrf_token = secrets.token_urlsafe(32)
     state = generate_jwt(
         {"csrf": csrf_token, "aud": DRIVE_OAUTH_STATE_AUDIENCE},
@@ -137,7 +151,7 @@ async def google_drive_authorize(
         DRIVE_OAUTH_STATE_LIFETIME_SECONDS,
     )
     authorization_url = await oauth_client.get_authorization_url(
-        _drive_redirect_uri(request),
+        _drive_redirect_uri(),
         state=state,
         scope=GOOGLE_DRIVE_SCOPES,
         # access_type=offline + prompt=consent are what make Google return a refresh_token (and
@@ -158,7 +172,6 @@ async def google_drive_authorize(
 
 @router.get("/callback")
 async def google_drive_callback(
-    request: Request,
     code: str | None = Query(default=None),
     state: str | None = Query(default=None),
     error: str | None = Query(default=None),
@@ -211,7 +224,7 @@ async def google_drive_callback(
         return failure_redirect("save_folder_first")
 
     try:
-        token = await oauth_client.get_access_token(code, _drive_redirect_uri(request))
+        token = await oauth_client.get_access_token(code, _drive_redirect_uri())
     except GetAccessTokenError:
         # A replayed/expired code (e.g. a reloaded callback URL) or a transient Google-side error.
         return failure_redirect()
