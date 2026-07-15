@@ -26,6 +26,10 @@ jobs:
       DROPBOX_OAUTH_CLIENT_ID: ${{ secrets.DROPBOX_OAUTH_CLIENT_ID }}
       DROPBOX_OAUTH_CLIENT_SECRET: ${{ secrets.DROPBOX_OAUTH_CLIENT_SECRET }}
       ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+      # Gemini pipeline calls moved here in R11, but this was never wired in until now (found live
+      # in prod as "Gemini call failed: GEMINI_API_KEY is not set" - tests mock the Gemini client,
+      # so its absence was invisible to CI). Same key as organize-me's own GEMINI_API_KEY secret.
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -88,12 +92,14 @@ jobs:
           DATABASE_URL: ${{ secrets.SUPABASE_PROD_URL }}
           GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
           DROPBOX_OAUTH_CLIENT_ID: ${{ secrets.DROPBOX_OAUTH_CLIENT_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           cat > /tmp/cloud-run-env.yaml <<EOF
           DATABASE_URL: "${DATABASE_URL}"
           GOOGLE_OAUTH_CLIENT_ID: "${GOOGLE_OAUTH_CLIENT_ID}"
           GOOGLE_DRIVE_REDIRECT_URI: "https://organizeme.russcoopersoftware.com/api/v1/storage-config/google-drive/callback"
           DROPBOX_OAUTH_CLIENT_ID: "${DROPBOX_OAUTH_CLIENT_ID}"
+          GEMINI_API_KEY: "${GEMINI_API_KEY}"
           GCP_PROJECT_ID: "${{ env.GCP_PROJECT_ID }}"
           CLOUD_TASKS_LOCATION: "${{ env.GCP_REGION }}"
           CLOUD_TASKS_QUEUE: "event-creator-pipeline-prod"
