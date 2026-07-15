@@ -24,6 +24,9 @@ jobs:
       # as an additional authorized callback in each app's console.
       GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
       GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
+      # Fixed per-environment value (issue #200), not a secret - must match what's registered on
+      # the Google OAuth client in Google Cloud Console.
+      GOOGLE_DRIVE_REDIRECT_URI: https://organizeme.qa.russcoopersoftware.com/api/v1/storage-config/google-drive/callback
       DROPBOX_OAUTH_CLIENT_ID: ${{ secrets.DROPBOX_OAUTH_CLIENT_ID }}
       DROPBOX_OAUTH_CLIENT_SECRET: ${{ secrets.DROPBOX_OAUTH_CLIENT_SECRET }}
       # Storage-credential encryption key. Tests inject their own throwaway keys regardless, so
@@ -102,6 +105,7 @@ jobs:
           cat > /tmp/cloud-run-env.yaml <<EOF
           DATABASE_URL: "${DATABASE_URL}"
           GOOGLE_OAUTH_CLIENT_ID: "${GOOGLE_OAUTH_CLIENT_ID}"
+          GOOGLE_DRIVE_REDIRECT_URI: "https://organizeme.qa.russcoopersoftware.com/api/v1/storage-config/google-drive/callback"
           DROPBOX_OAUTH_CLIENT_ID: "${DROPBOX_OAUTH_CLIENT_ID}"
           E2E_TEST_MODE: "true"
           GCP_PROJECT_ID: "${{ env.GCP_PROJECT_ID }}"

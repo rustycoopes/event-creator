@@ -33,6 +33,12 @@ def _env(monkeypatch: pytest.MonkeyPatch) -> None:
         "DATABASE_URL",
         __import__("os").environ.get("DATABASE_URL", "postgresql://user:pass@localhost/testdb"),
     )
+    # Fixed per-environment value (issue #200) rather than derived from the test client's Host
+    # header - see storage_google_drive.py's _drive_redirect_uri docstring.
+    monkeypatch.setenv(
+        "GOOGLE_DRIVE_REDIRECT_URI",
+        "https://organizeme.qa.russcoopersoftware.com/api/v1/storage-config/google-drive/callback",
+    )
 
 
 @pytest.fixture

@@ -15,6 +15,17 @@ class Settings(BaseSettings):
     # construction - the connect flow only needs real values once a user actually clicks Connect.
     google_oauth_client_id: str = ""
     google_oauth_client_secret: str = ""
+    # The Google Drive OAuth callback's absolute redirect_uri (issue #200), fixed per environment
+    # rather than derived from the incoming request's Host header. Google rejects a redirect_uri
+    # that doesn't exactly match one registered on the OAuth client with
+    # `Error 400: redirect_uri_mismatch` - deriving it from request.base_url meant the value
+    # silently tracked whatever domain/service happened to receive the request (the raw Cloud Run
+    # URL before the R5 load-balancer cutover, this service's own URL once Storage moved here in
+    # R7), never landing on one fixed value an operator could register in Google Cloud Console.
+    # Empty default (mirrors the other optional secrets above) - /auth fails fast with a clear
+    # error if it's actually used while unset, rather than sending the user through the whole
+    # Google consent flow only to have Google reject it.
+    google_drive_redirect_uri: str = ""
     # Dropbox OAuth app credentials (Slice R7). Same empty-default reasoning.
     dropbox_oauth_client_id: str = ""
     dropbox_oauth_client_secret: str = ""
