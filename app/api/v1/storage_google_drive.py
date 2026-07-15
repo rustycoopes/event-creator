@@ -197,16 +197,30 @@ async def google_drive_callback(
     if user_id is None:
         return RedirectResponse("/login", status_code=status.HTTP_302_FOUND)
 
+    # Issue #203: the generic google_drive_auth_failed banner covers several distinct failure
+    # modes below that previously logged nothing, making a real connect failure indistinguishable
+    # from a stale/replayed callback URL without a production debugging round-trip. Each branch
+    # now logs which check actually failed - none of these log the state/cookie/code values
+    # themselves (attacker- or Google-controlled input, and the whole point of the CSRF check is
+    # that they shouldn't be trusted).
+    if error is not None:
+        logger.warning("Google Drive callback: Google returned error=%s", error)
+        return failure_redirect()
+    if code is None:
+        logger.warning("Google Drive callback: no ?code in the callback request")
+        return failure_redirect()
+
     state_data: dict[str, object] = {}
     if state is not None:
         try:
             state_data = decode_jwt(
                 state, get_settings().jwt_secret, audience=[DRIVE_OAUTH_STATE_AUDIENCE]
             )
-        except pyjwt.PyJWTError:
-            state_data = {}
-
-    if error is not None or code is None or not state_data:
+        except pyjwt.PyJWTError as exc:
+            logger.warning("Google Drive callback: state JWT failed to decode: %s", exc)
+            return failure_redirect()
+    if not state_data:
+        logger.warning("Google Drive callback: no ?state in the callback request")
         return failure_redirect()
 
     csrf_from_state = str(state_data.get("csrf", ""))
@@ -217,6 +231,11 @@ async def google_drive_callback(
         or not drive_csrf_cookie.isascii()
         or not secrets.compare_digest(drive_csrf_cookie, csrf_from_state)
     ):
+        logger.warning(
+            "Google Drive callback: CSRF cookie missing or did not match signed state "
+            "(cookie_present=%s)",
+            bool(drive_csrf_cookie),
+        )
         return failure_redirect()
 
     config = await get_user_storage_config(db, user_id)
@@ -225,8 +244,14 @@ async def google_drive_callback(
 
     try:
         token = await oauth_client.get_access_token(code, _drive_redirect_uri())
-    except GetAccessTokenError:
+    except GetAccessTokenError as exc:
         # A replayed/expired code (e.g. a reloaded callback URL) or a transient Google-side error.
+        # exc's message/response come from Google, not this app - safe to log (no secrets of ours).
+        logger.warning(
+            "Google Drive callback: token exchange rejected by Google: %s (status=%s)",
+            exc,
+            exc.response.status_code if exc.response is not None else "n/a",
+        )
         return failure_redirect()
 
     # Construct the cipher only now that everything has validated - this is the first point that
