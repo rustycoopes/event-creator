@@ -86,11 +86,18 @@ async def test_build_storage_and_file_rejects_unknown_mode() -> None:
 
 
 async def test_dispatch_logs_and_returns_when_run_row_missing(
+    db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """A run id that doesn't exist (e.g. a stale/duplicate Cloud Tasks delivery after the row was
     somehow removed) must not raise - it's logged and dispatch returns cleanly. Uses a bogus,
-    never-seeded run id, so this needs a reachable DB (per module docstring) but no fixture data."""
+    never-seeded run id, so this needs a reachable DB (per module docstring) but no fixture data.
+
+    Bound to db_session's own connection (see test_run_already_terminal_returns_false_for_unknown_
+    run's comment) rather than letting _claim_run fall through to the process-wide shared engine -
+    that's what intermittently raises "Future attached to a different loop" under pytest-asyncio's
+    per-test event loops."""
+    await _bind_dispatch_to_session(monkeypatch, db_session)
     monkeypatch.setattr(dispatch_module, "get_gemini_client", lambda: FakeGeminiClient("[]"))
     monkeypatch.setattr(dispatch_module, "get_pipeline_notifier", lambda: FakeNotificationSender())
 
@@ -105,7 +112,17 @@ async def test_dispatch_logs_and_returns_when_run_row_missing(
     )
 
 
-async def test_run_already_terminal_returns_false_for_unknown_run() -> None:
+async def test_run_already_terminal_returns_false_for_unknown_run(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Bound to db_session's own connection (like every other DB-touching test in this file) -
+    # run_already_terminal's own _session_maker() otherwise resolves to the process-wide, lru_
+    # cache'd engine (app.db.session.get_engine), whose pooled connections are bound to whichever
+    # event loop first created them. pytest-asyncio gives each test function its own loop by
+    # default, so reusing that shared engine from a different test's loop intermittently raises
+    # "Future attached to a different loop" - exactly the failure mode db_session's own docstring
+    # warns about.
+    await _bind_dispatch_to_session(monkeypatch, db_session)
     assert await dispatch_module.run_already_terminal(uuid.uuid4()) is False
 
 
