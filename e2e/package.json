@@ -1,0 +1,15 @@
+{
+  "name": "event-creator-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Playwright end-to-end UX tests for Event Creator, run against the deployed QA Cloud Run instance (Slice R13).",
+  "scripts": {
+    "test": "playwright test",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0",
+    "@types/node": "^22.7.0",
+    "typescript": "^5.6.0"
+  }
+}
