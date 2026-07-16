@@ -15,6 +15,7 @@ from app.api.v1.llm_prompt import get_or_create_user_prompt
 from app.core.auth import current_user_id_optional
 from app.core.templating import templates
 from app.db.session import get_db
+from app.services.host_user import get_dark_mode
 
 router = APIRouter(tags=["pages"])
 
@@ -33,5 +34,5 @@ async def prompt_page(
     return templates.TemplateResponse(
         request,
         "pages/prompt.html",
-        {"dark_mode": False, "prompt_text": prompt.prompt_text},
+        {"dark_mode": await get_dark_mode(db, user_id), "prompt_text": prompt.prompt_text},
     )

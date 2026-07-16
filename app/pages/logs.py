@@ -34,6 +34,7 @@ from app.core.templating import templates
 from app.db.session import get_db
 from app.models.processing_run import ProcessingRunStatus
 from app.models.processing_step import ProcessingStep
+from app.services.host_user import get_dark_mode
 
 router = APIRouter(tags=["pages"])
 
@@ -137,7 +138,7 @@ async def logs_page(
 
     has_active_filters = bool(run_status or parsed_date_from or parsed_date_to)
     context = {
-        "dark_mode": False,
+        "dark_mode": await get_dark_mode(db, user_id),
         "runs": [to_processing_run_read(r, summaries.get(r.id, "")) for r in runs],
         "page": page,
         "total_pages": total_pages,

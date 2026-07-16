@@ -35,6 +35,7 @@ from app.core.config import Settings, get_settings
 from app.core.onboarding import build_onboarding_steps, onboarding_complete
 from app.core.templating import templates
 from app.db.session import get_db
+from app.services.host_user import get_dark_mode
 from app.services.user_settings import get_or_create_user_settings
 
 router = APIRouter(tags=["pages"])
@@ -136,10 +137,7 @@ async def dashboard_page(
     )
     user_settings = await get_or_create_user_settings(db, user_id)
     context = {
-        # dark_mode: no per-user preference lookup here - Event Creator has no User model of its
-        # own (no fastapi-users), and syncing the Host's stored preference across services is out
-        # of scope for this slice (see app.pages.processing for the same convention).
-        "dark_mode": False,
+        "dark_mode": await get_dark_mode(db, user_id),
         "events": [to_event_read(e) for e in events],
         "page": page,
         "total_pages": total_pages,

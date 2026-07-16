@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.host_user import HostUser
-from app.services.host_user import get_host_user
+from app.services.host_user import get_dark_mode, get_host_user
 from tests.conftest import create_host_user
 
 
@@ -43,6 +43,16 @@ async def test_get_host_user_returns_the_row_for_a_known_id(db_session: AsyncSes
 
     assert host_user is not None
     assert host_user.email == "known@example.com"
+
+
+async def test_get_dark_mode_returns_false_for_an_unknown_id(db_session: AsyncSession) -> None:
+    assert await get_dark_mode(db_session, uuid.uuid4()) is False
+
+
+async def test_get_dark_mode_returns_the_hosts_stored_preference(db_session: AsyncSession) -> None:
+    user_id = await create_host_user(db_session, dark_mode=True)
+
+    assert await get_dark_mode(db_session, user_id) is True
 
 
 async def test_host_user_mapping_only_declares_the_columns_it_reads(db_session: AsyncSession) -> None:

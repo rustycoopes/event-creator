@@ -37,6 +37,34 @@ async def test_processing_page_shows_empty_state_when_no_runs(
     assert "sse-connect" not in body
 
 
+async def test_processing_page_applies_the_hosts_dark_mode_preference(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """Regression test for issue #207: the page must read the Host's `dark_mode` preference
+    rather than hardcoding light mode."""
+    user_id = await create_host_user(db_session, dark_mode=True)
+
+    response = await client.get(
+        "/processing", cookies={"organizeme_auth": make_token.valid(sub=str(user_id))}
+    )
+
+    assert response.status_code == 200
+    assert 'data-theme="dark"' in response.text
+
+
+async def test_processing_page_defaults_to_light_mode(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    user_id = await create_host_user(db_session, dark_mode=False)
+
+    response = await client.get(
+        "/processing", cookies={"organizeme_auth": make_token.valid(sub=str(user_id))}
+    )
+
+    assert response.status_code == 200
+    assert 'data-theme="corporate"' in response.text
+
+
 async def test_processing_page_renders_steps_and_sse_connection_for_a_run(
     client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
 ) -> None:
