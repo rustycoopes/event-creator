@@ -28,6 +28,32 @@ async def test_renders_the_seeded_default_prompt_for_a_new_user(
     assert FACTORY_DEFAULT_PROMPT.splitlines()[0] in response.text
 
 
+async def test_prompt_page_applies_the_hosts_dark_mode_preference(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """Regression test for issue #207: the page must read the Host's `dark_mode` preference
+    rather than hardcoding light mode."""
+    user_id = await create_host_user(db_session, dark_mode=True)
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.get("/prompt", cookies={"organizeme_auth": token})
+
+    assert response.status_code == 200
+    assert 'data-theme="dark"' in response.text
+
+
+async def test_prompt_page_defaults_to_light_mode(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    user_id = await create_host_user(db_session, dark_mode=False)
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.get("/prompt", cookies={"organizeme_auth": token})
+
+    assert response.status_code == 200
+    assert 'data-theme="corporate"' in response.text
+
+
 async def test_renders_a_previously_saved_edit(
     client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
 ) -> None:

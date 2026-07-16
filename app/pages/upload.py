@@ -23,6 +23,7 @@ from app.core.auth import current_user_id_optional
 from app.core.config import Settings, get_settings
 from app.core.templating import templates
 from app.db.session import get_db
+from app.services.host_user import get_dark_mode
 
 router = APIRouter(tags=["pages"])
 
@@ -43,7 +44,7 @@ async def upload_page(
         request,
         "pages/upload.html",
         {
-            "dark_mode": False,
+            "dark_mode": await get_dark_mode(db, user_id),
             "drive_connected": storage_connected,
             "using_ephemeral": using_ephemeral,
         },

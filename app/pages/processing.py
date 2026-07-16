@@ -32,6 +32,7 @@ from app.core.templating import templates
 from app.db.session import get_db
 from app.models.processing_run import ProcessingRun
 from app.models.processing_step import ProcessingStep
+from app.services.host_user import get_dark_mode
 from app.services.pipeline.progress import (
     TERMINAL_RUN_STATUSES,
     build_step_views,
@@ -102,9 +103,7 @@ async def processing_page(
         request,
         "pages/processing.html",
         {
-            # No per-user dark-mode preference lookup here - Event Creator has no User model of
-            # its own (see app.pages.dashboard).
-            "dark_mode": False,
+            "dark_mode": await get_dark_mode(db, user_id),
             "run": processing_run,
             "run_id": str(processing_run.id) if processing_run is not None else None,
             "run_status": run_status,
@@ -140,7 +139,7 @@ async def processing_run_detail_page(
         request,
         "pages/processing_run_detail.html",
         {
-            "dark_mode": False,
+            "dark_mode": await get_dark_mode(db, user_id),
             "run": run,
             "run_id": str(run.id),
             "steps": steps,

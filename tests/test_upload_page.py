@@ -31,6 +31,32 @@ async def test_upload_page_renders_dropzone_and_file_picker(
     assert "/api/v1/upload" in body
 
 
+async def test_upload_page_applies_the_hosts_dark_mode_preference(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """Regression test for issue #207: the page must read the Host's `dark_mode` preference
+    rather than hardcoding light mode."""
+    user_id = await create_host_user(db_session, dark_mode=True)
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.get("/upload", cookies={"organizeme_auth": token})
+
+    assert response.status_code == 200
+    assert 'data-theme="dark"' in response.text
+
+
+async def test_upload_page_defaults_to_light_mode(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    user_id = await create_host_user(db_session, dark_mode=False)
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.get("/upload", cookies={"organizeme_auth": token})
+
+    assert response.status_code == 200
+    assert 'data-theme="corporate"' in response.text
+
+
 async def test_upload_page_warns_when_storage_not_connected_with_ephemeral_fallback(
     client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
 ) -> None:

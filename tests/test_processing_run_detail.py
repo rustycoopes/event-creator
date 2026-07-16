@@ -29,6 +29,42 @@ async def test_processing_run_detail_page_requires_login(client: AsyncClient) ->
     assert response.headers["location"] == "/login"
 
 
+async def test_processing_run_detail_page_applies_the_hosts_dark_mode_preference(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """Regression test for issue #207: the page must read the Host's `dark_mode` preference
+    rather than hardcoding light mode."""
+    user_id = await create_host_user(db_session, dark_mode=True)
+    run = ProcessingRun(user_id=user_id, filename="chat.txt", status=ProcessingRunStatus.SUCCESS)
+    db_session.add(run)
+    await db_session.flush()
+
+    response = await client.get(
+        f"/processing-runs/{run.id}",
+        cookies={"organizeme_auth": make_token.valid(sub=str(user_id))},
+    )
+
+    assert response.status_code == 200
+    assert 'data-theme="dark"' in response.text
+
+
+async def test_processing_run_detail_page_defaults_to_light_mode(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    user_id = await create_host_user(db_session, dark_mode=False)
+    run = ProcessingRun(user_id=user_id, filename="chat.txt", status=ProcessingRunStatus.SUCCESS)
+    db_session.add(run)
+    await db_session.flush()
+
+    response = await client.get(
+        f"/processing-runs/{run.id}",
+        cookies={"organizeme_auth": make_token.valid(sub=str(user_id))},
+    )
+
+    assert response.status_code == 200
+    assert 'data-theme="corporate"' in response.text
+
+
 async def test_processing_run_detail_page_404s_for_nonexistent_run(
     client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
 ) -> None:
