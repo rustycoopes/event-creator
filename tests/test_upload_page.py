@@ -57,6 +57,20 @@ async def test_upload_page_defaults_to_light_mode(
     assert 'data-theme="corporate"' in response.text
 
 
+async def test_upload_page_renders_the_hosts_collapsed_group_preference(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """Regression test for event-creator#18/#19 - see test_logs_page.py's equivalent test for the
+    full rationale (missing nav context here would crash the shared sidebar template)."""
+    user_id = await create_host_user(db_session, nav_collapsed_groups={"event-creator": True})
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.get("/upload", cookies={"organizeme_auth": token})
+
+    assert response.status_code == 200
+    assert "storedCollapsed: {&#34;event-creator&#34;: true}" in response.text
+
+
 async def test_upload_page_warns_when_storage_not_connected_with_ephemeral_fallback(
     client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
 ) -> None:

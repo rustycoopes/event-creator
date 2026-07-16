@@ -7,6 +7,7 @@ import os
 # tests/conftest.py, which this was ported from but missed this line - see #47).
 os.environ.setdefault("COOKIE_SECURE", "false")
 
+import json
 import time
 import uuid
 from collections.abc import AsyncIterator
@@ -127,6 +128,7 @@ async def create_host_user(
     email: str | None = None,
     phone_number: str | None = None,
     dark_mode: bool = False,
+    nav_collapsed_groups: dict[str, bool] | None = None,
 ) -> uuid.UUID:
     """Insert a row directly into the Host's `host.users` table for a test to attach a Host JWT
     (via `make_token`) and Event-Creator-owned rows (StorageConfig, UserSettings) to.
@@ -143,9 +145,10 @@ async def create_host_user(
         text(
             "INSERT INTO host.users "
             "(id, email, hashed_password, is_active, is_superuser, is_verified, "
-            "phone_number, dark_mode) "
+            "phone_number, dark_mode, nav_collapsed_groups) "
             "VALUES "
-            "(:id, :email, :hashed_password, true, false, true, :phone_number, :dark_mode)"
+            "(:id, :email, :hashed_password, true, false, true, :phone_number, :dark_mode, "
+            "CAST(:nav_collapsed_groups AS JSON))"
         ),
         {
             "id": user_id,
@@ -153,6 +156,7 @@ async def create_host_user(
             "hashed_password": "not-a-real-hash",
             "phone_number": phone_number,
             "dark_mode": dark_mode,
+            "nav_collapsed_groups": json.dumps(nav_collapsed_groups or {}),
         },
     )
     await session.flush()

@@ -32,10 +32,11 @@ from app.api.v1.events import (
 from app.api.v1.storage_config import is_storage_connected
 from app.core.auth import current_user_id_optional
 from app.core.config import Settings, get_settings
+from app.core.nav import sidebar_nav_context
 from app.core.onboarding import build_onboarding_steps, onboarding_complete
 from app.core.templating import templates
 from app.db.session import get_db
-from app.services.host_user import get_dark_mode
+from app.services.host_user import get_host_user
 from app.services.user_settings import get_or_create_user_settings
 
 router = APIRouter(tags=["pages"])
@@ -136,8 +137,10 @@ async def dashboard_page(
         False if is_htmx_request else await is_storage_connected(db, user_id, settings)
     )
     user_settings = await get_or_create_user_settings(db, user_id)
+    # One HostUser fetch covers both dark_mode and nav_collapsed_groups.
+    host_user = await get_host_user(db, user_id)
     context = {
-        "dark_mode": await get_dark_mode(db, user_id),
+        "dark_mode": host_user.dark_mode if host_user is not None else False,
         "events": [to_event_read(e) for e in events],
         "page": page,
         "total_pages": total_pages,
@@ -158,6 +161,7 @@ async def dashboard_page(
         "onboarding_steps": build_onboarding_steps(user_settings),
         "onboarding_complete": onboarding_complete(user_settings),
         "drive_connected": storage_connected,
+        **sidebar_nav_context(host_user, request),
     }
     template_name = "partials/dashboard_body.html" if is_htmx_request else "pages/dashboard.html"
     return templates.TemplateResponse(request, template_name, context)

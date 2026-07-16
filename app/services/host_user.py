@@ -24,13 +24,3 @@ async def get_host_user(db: AsyncSession, user_id: uuid.UUID) -> HostUser | None
     """
     result = await db.execute(select(HostUser).where(HostUser.id == user_id))
     return result.scalar_one_or_none()
-
-
-async def get_dark_mode(db: AsyncSession, user_id: uuid.UUID) -> bool:
-    """The Host's `dark_mode` preference for `user_id`, defaulting to ``False`` if the row can't
-    be found.
-
-    Shared by every page route's template context (issue #207).
-    """
-    host_user = await get_host_user(db, user_id)
-    return host_user.dark_mode if host_user is not None else False

@@ -114,7 +114,12 @@ async def test_storage_fragment_shows_disconnect_control_when_drive_connected(
     body = response.text
     assert 'id="disconnect-drive"' in body
     assert "Disconnect Google Drive" in body
-    assert '"is_connected":true' in body.replace(" ", "")
+    # The chrome-v0.5.4 tojson filter HTML-entity-escapes quotes (organize-me#212's fix for the
+    # sidebar-nav-groups feature's x-data attribute embedding) - applies to every `| tojson` use
+    # in the shared package, not just the sidebar, so this fragment's own JSON literal is now
+    # &#34;-escaped too. Still correct: the browser decodes entities before Alpine parses the
+    # attribute value as JSON.
+    assert "&#34;is_connected&#34;:true" in body.replace(" ", "")
 
 
 async def test_storage_fragment_shows_dropbox_connect_controls(
@@ -229,9 +234,11 @@ async def test_notifications_fragment_reflects_saved_prefs(
 
     assert response.status_code == 200
     body = response.text.replace(" ", "")
-    assert '"notification_email":false' in body
-    assert '"notification_sms":true' in body
-    assert '"phone_number":"+15551234567"' in body
+    # See test_storage_fragment_shows_disconnect_control_when_drive_connected's comment above for
+    # why these are now HTML-entity-escaped rather than raw quotes.
+    assert "&#34;notification_email&#34;:false" in body
+    assert "&#34;notification_sms&#34;:true" in body
+    assert "&#34;phone_number&#34;:&#34;+15551234567&#34;" in body
 
 
 async def test_notifications_fragment_x_data_is_not_truncated_by_a_stray_quote(

@@ -92,6 +92,24 @@ async def test_logs_page_defaults_to_light_mode(
     assert 'data-theme="corporate"' in response.text
 
 
+async def test_logs_page_renders_the_hosts_collapsed_group_preference(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """Regression test for event-creator#18/#19: every page extending
+    chrome_authenticated_base.html must supply nav_groups/flat_nav_items/nav_collapsed_json/
+    nav_stored_collapsed_json, or the template's `{{ ... | tojson }}` calls raise a TypeError on
+    Jinja's Undefined sentinel. This also confirms the real Host-stored preference is read, not
+    hardcoded."""
+    user_id = await create_host_user(db_session, nav_collapsed_groups={"event-creator": True})
+
+    response = await client.get(
+        "/logs", cookies={"organizeme_auth": make_token.valid(sub=str(user_id))}
+    )
+
+    assert response.status_code == 200
+    assert "storedCollapsed: {&#34;event-creator&#34;: true}" in response.text
+
+
 async def test_logs_shows_empty_state_with_no_runs(
     client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
 ) -> None:
