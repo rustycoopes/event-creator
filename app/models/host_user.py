@@ -19,8 +19,8 @@ network call - but is **select-only by convention and by construction**:
   excludes the `host` schema outright - a filter survives `target_metadata` sharing; a separate
   `DeclarativeBase` doesn't survive FK resolution.
 - Only the columns this service actually reads are declared (`id`, `email`, `phone_number`,
-  `dark_mode`) - deliberately omitting `hashed_password`, `is_active`, `is_superuser`,
-  `is_verified`, etc., which live on the Host's real `User` model (see
+  `dark_mode`, `nav_collapsed_groups`) - deliberately omitting `hashed_password`, `is_active`,
+  `is_superuser`, `is_verified`, etc., which live on the Host's real `User` model (see
   `C:\\dev\\organize-me\\app\\models\\user.py`) and are none of Event Creator's concern.
 - Nothing in this codebase ever `db.add()`s, updates, or deletes a `HostUser` - callers must only
   ever `select()` it. There is no ORM-level mechanism preventing a write (SQLAlchemy has no
@@ -32,7 +32,7 @@ network call - but is **select-only by convention and by construction**:
 import uuid
 
 from fastapi_users_db_sqlalchemy.generics import GUID
-from sqlalchemy import Boolean, String
+from sqlalchemy import JSON, Boolean, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -48,3 +48,4 @@ class HostUser(Base):
     email: Mapped[str | None] = mapped_column(String(length=320), nullable=True)
     phone_number: Mapped[str | None] = mapped_column(nullable=True)
     dark_mode: Mapped[bool] = mapped_column(Boolean, default=False)
+    nav_collapsed_groups: Mapped[dict[str, bool]] = mapped_column(JSON, default=dict)

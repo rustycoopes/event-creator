@@ -28,11 +28,12 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import current_user_id, current_user_id_optional
+from app.core.nav import sidebar_nav_context
 from app.core.templating import templates
 from app.db.session import get_db
 from app.models.processing_run import ProcessingRun
 from app.models.processing_step import ProcessingStep
-from app.services.host_user import get_dark_mode
+from app.services.host_user import get_host_user
 from app.services.pipeline.progress import (
     TERMINAL_RUN_STATUSES,
     build_step_views,
@@ -98,18 +99,20 @@ async def processing_page(
     # Only stream when there's something left to watch: a run that already finished renders its
     # final state statically (no wasted SSE connection just to receive one update and close).
     live = processing_run is not None and run_status not in TERMINAL_RUN_STATUSES
+    host_user = await get_host_user(db, user_id)
 
     return templates.TemplateResponse(
         request,
         "pages/processing.html",
         {
-            "dark_mode": await get_dark_mode(db, user_id),
+            "dark_mode": host_user.dark_mode if host_user is not None else False,
             "run": processing_run,
             "run_id": str(processing_run.id) if processing_run is not None else None,
             "run_status": run_status,
             "filename": processing_run.filename if processing_run is not None else None,
             "steps": steps,
             "live": live,
+            **sidebar_nav_context(host_user, request),
         },
     )
 
@@ -134,15 +137,17 @@ async def processing_run_detail_page(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
     steps = build_step_views(await load_step_statuses(db, run.id))
+    host_user = await get_host_user(db, user_id)
 
     return templates.TemplateResponse(
         request,
         "pages/processing_run_detail.html",
         {
-            "dark_mode": await get_dark_mode(db, user_id),
+            "dark_mode": host_user.dark_mode if host_user is not None else False,
             "run": run,
             "run_id": str(run.id),
             "steps": steps,
+            **sidebar_nav_context(host_user, request),
         },
     )
 

@@ -21,9 +21,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.storage_config import is_storage_connected
 from app.core.auth import current_user_id_optional
 from app.core.config import Settings, get_settings
+from app.core.nav import sidebar_nav_context
 from app.core.templating import templates
 from app.db.session import get_db
-from app.services.host_user import get_dark_mode
+from app.services.host_user import get_host_user
 
 router = APIRouter(tags=["pages"])
 
@@ -40,12 +41,14 @@ async def upload_page(
     storage_connected = await is_storage_connected(db, user_id, settings)
     # If no storage configured, uploads will fall back to ephemeral storage (issue #79).
     using_ephemeral = not settings.e2e_test_mode and not storage_connected
+    host_user = await get_host_user(db, user_id)
     return templates.TemplateResponse(
         request,
         "pages/upload.html",
         {
-            "dark_mode": await get_dark_mode(db, user_id),
+            "dark_mode": host_user.dark_mode if host_user is not None else False,
             "drive_connected": storage_connected,
             "using_ephemeral": using_ephemeral,
+            **sidebar_nav_context(host_user, request),
         },
     )

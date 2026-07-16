@@ -30,11 +30,12 @@ from app.api.v1.processing_runs import (
     to_processing_run_read,
 )
 from app.core.auth import current_user_id_optional
+from app.core.nav import sidebar_nav_context
 from app.core.templating import templates
 from app.db.session import get_db
 from app.models.processing_run import ProcessingRunStatus
 from app.models.processing_step import ProcessingStep
-from app.services.host_user import get_dark_mode
+from app.services.host_user import get_host_user
 
 router = APIRouter(tags=["pages"])
 
@@ -137,8 +138,9 @@ async def logs_page(
         )
 
     has_active_filters = bool(run_status or parsed_date_from or parsed_date_to)
+    host_user = await get_host_user(db, user_id)
     context = {
-        "dark_mode": await get_dark_mode(db, user_id),
+        "dark_mode": host_user.dark_mode if host_user is not None else False,
         "runs": [to_processing_run_read(r, summaries.get(r.id, "")) for r in runs],
         "page": page,
         "total_pages": total_pages,
@@ -157,6 +159,7 @@ async def logs_page(
         "next_url": url_for(page=page + 1) if page < total_pages else None,
         "last_url": url_for(page=total_pages) if page < total_pages else None,
         "sort_urls": {column: sort_url_for(column) for column in _SORT_COLUMNS_TUPLE},
+        **sidebar_nav_context(host_user, request),
     }
     template_name = (
         "partials/logs_body.html" if request.headers.get("hx-request") == "true" else "pages/logs.html"

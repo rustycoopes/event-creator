@@ -65,6 +65,25 @@ async def test_processing_run_detail_page_defaults_to_light_mode(
     assert 'data-theme="corporate"' in response.text
 
 
+async def test_processing_run_detail_page_renders_the_hosts_collapsed_group_preference(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """Regression test for event-creator#18/#19 - see test_logs_page.py's equivalent test for the
+    full rationale (missing nav context here would crash the shared sidebar template)."""
+    user_id = await create_host_user(db_session, nav_collapsed_groups={"event-creator": True})
+    run = ProcessingRun(user_id=user_id, filename="chat.txt", status=ProcessingRunStatus.SUCCESS)
+    db_session.add(run)
+    await db_session.flush()
+
+    response = await client.get(
+        f"/processing-runs/{run.id}",
+        cookies={"organizeme_auth": make_token.valid(sub=str(user_id))},
+    )
+
+    assert response.status_code == 200
+    assert "storedCollapsed: {&#34;event-creator&#34;: true}" in response.text
+
+
 async def test_processing_run_detail_page_404s_for_nonexistent_run(
     client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
 ) -> None:
