@@ -50,7 +50,7 @@ class Settings(BaseSettings):
     # there). The Resend sandbox sender this used to default to (onboarding@resend.dev) only
     # delivers to the Resend account owner's own verified address, so every processing-run
     # notification email silently failed to reach real users. Override via EMAIL_FROM if needed.
-    email_from: str = "OrganizeMe <uploads@organizeme.russcoopersoftware.com>"
+    email_from: str = "OrganizeMe <onboarding@organizeme.russcoopersoftware.com>"
     # Base URL used to build links (dashboard, run logs) in notification emails/SMS. Defaults to
     # https://organize-me.app for production; override to http://localhost:3000 in dev.
     base_url: str = "https://organize-me.app"
