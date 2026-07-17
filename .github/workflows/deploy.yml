@@ -110,6 +110,7 @@ jobs:
           DATABASE_URL: "${DATABASE_URL}"
           GOOGLE_OAUTH_CLIENT_ID: "${GOOGLE_OAUTH_CLIENT_ID}"
           GOOGLE_DRIVE_REDIRECT_URI: "https://organizeme.russcoopersoftware.com/api/v1/storage-config/google-drive/callback"
+          BASE_URL: "https://organizeme.russcoopersoftware.com"
           DROPBOX_OAUTH_CLIENT_ID: "${DROPBOX_OAUTH_CLIENT_ID}"
           GEMINI_API_KEY: "${GEMINI_API_KEY}"
           RESEND_API_KEY: "${RESEND_API_KEY}"

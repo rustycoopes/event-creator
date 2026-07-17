@@ -51,8 +51,10 @@ class Settings(BaseSettings):
     # delivers to the Resend account owner's own verified address, so every processing-run
     # notification email silently failed to reach real users. Override via EMAIL_FROM if needed.
     email_from: str = "OrganizeMe <onboarding@organizeme.russcoopersoftware.com>"
-    # Base URL used to build links (dashboard, run logs) in notification emails/SMS. Defaults to
-    # https://organize-me.app for production; override to http://localhost:3000 in dev.
+    # Base URL used to build links (dashboard, run logs) in notification emails/SMS. QA/prod set
+    # this explicitly (see deploy.yml/ci.yml - the shared LB domain, not this service's own Cloud
+    # Run URL) since it was never wired there before and every notification link pointed at this
+    # placeholder default instead. Override to http://localhost:3000 in local dev.
     base_url: str = "https://organize-me.app"
     # Twilio credentials used by app.services.notifications.sms.TwilioSmsSender (ported from
     # organize-me). Empty defaults - TwilioSmsSender raises a clear error if it's actually used
