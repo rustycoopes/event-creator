@@ -36,6 +36,14 @@ jobs:
       # in prod as "Gemini call failed: GEMINI_API_KEY is not set" - tests mock the Gemini client,
       # so its absence was invisible to CI). Same key as organize-me's own GEMINI_API_KEY secret.
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      # Processing-run notifications (email + SMS) moved here in R8/R11 alongside the rest of the
+      # pipeline, but RESEND_API_KEY/TWILIO_* were never wired in - same class of gap as
+      # GEMINI_API_KEY above, just not caught yet because tests mock both senders. Same secrets as
+      # organize-me's own ci.yml.
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+      TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+      TWILIO_PHONE_NUMBER: ${{ secrets.TWILIO_PHONE_NUMBER }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -106,6 +114,10 @@ jobs:
           GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
           DROPBOX_OAUTH_CLIENT_ID: ${{ secrets.DROPBOX_OAUTH_CLIENT_ID }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_PHONE_NUMBER: ${{ secrets.TWILIO_PHONE_NUMBER }}
         run: |
           cat > /tmp/cloud-run-env.yaml <<EOF
           DATABASE_URL: "${DATABASE_URL}"
@@ -113,6 +125,10 @@ jobs:
           GOOGLE_DRIVE_REDIRECT_URI: "https://organizeme.qa.russcoopersoftware.com/api/v1/storage-config/google-drive/callback"
           DROPBOX_OAUTH_CLIENT_ID: "${DROPBOX_OAUTH_CLIENT_ID}"
           GEMINI_API_KEY: "${GEMINI_API_KEY}"
+          RESEND_API_KEY: "${RESEND_API_KEY}"
+          TWILIO_ACCOUNT_SID: "${TWILIO_ACCOUNT_SID}"
+          TWILIO_AUTH_TOKEN: "${TWILIO_AUTH_TOKEN}"
+          TWILIO_PHONE_NUMBER: "${TWILIO_PHONE_NUMBER}"
           E2E_TEST_MODE: "true"
           GCP_PROJECT_ID: "${{ env.GCP_PROJECT_ID }}"
           CLOUD_TASKS_LOCATION: "${{ env.GCP_REGION }}"

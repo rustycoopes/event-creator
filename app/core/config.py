@@ -46,8 +46,11 @@ class Settings(BaseSettings):
     # organize-me). Empty default (mirrors the other optional secrets above) - ResendEmailSender
     # raises a clear RuntimeError if it's actually used while unset.
     resend_api_key: str = ""
-    # Swap via EMAIL_FROM once a custom domain is verified.
-    email_from: str = "OrganizeMe <onboarding@resend.dev>"
+    # Verified custom domain sender - mirrors organize-me's own EMAIL_FROM default (issue #152
+    # there). The Resend sandbox sender this used to default to (onboarding@resend.dev) only
+    # delivers to the Resend account owner's own verified address, so every processing-run
+    # notification email silently failed to reach real users. Override via EMAIL_FROM if needed.
+    email_from: str = "OrganizeMe <uploads@organizeme.russcoopersoftware.com>"
     # Base URL used to build links (dashboard, run logs) in notification emails/SMS. Defaults to
     # https://organize-me.app for production; override to http://localhost:3000 in dev.
     base_url: str = "https://organize-me.app"
