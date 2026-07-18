@@ -1,15 +1,24 @@
 """Registry-decoupling (organize-me#218): this service's own registry client wiring.
 
-`app/main.py`'s `lifespan` calls `configure_client_registry_source()` on startup (constructing a
-`FetchedRegistrySource` seeded with this service's own cold-start default) and
-`start_registry_refresh_task()`/`stop_registry_refresh_task()` to spawn/cancel the background
-refresh loop - see docs/features/registry-decoupling/TDD.md "Background refresh loop (per
-consumer)".
+`app/main.py`'s `lifespan` calls `configure_client_registry_source()` again on startup (replacing
+the module-level source below with a fresh one) and `start_registry_refresh_task()`/
+`stop_registry_refresh_task()` to spawn/cancel the background refresh loop - see
+docs/features/registry-decoupling/TDD.md "Background refresh loop (per consumer)".
 
 `SELF_APP_ENTRY` is this service's own copy of the app-registry entry that would otherwise be
 authored in organize-me's `app/core/registry.py` - each consumer repo maintains its own copy
 (rather than importing the Host's) precisely so it can vouch for its own nav/Settings/API surface
 even when the Host is unreachable, per the PRD's "Cold-start fallback" decision.
+
+Registry-decoupling Slice 3 (organize-me#220): `configure_client_registry_source()` is also called
+at THIS MODULE's import time (bottom of file), not only inside `lifespan`. `app/main.py`'s own
+page router imports transitively import `app.core.templating`, which calls
+`organizeme_chrome.templating.register_chrome()` - itself a module-level call to `get_app()` - at
+*import* time, before `lifespan` ever runs. Before Slice 3 deleted `organizeme_chrome`'s compiled-in
+fallback, an unconfigured `get_app()` silently degraded to that fallback instead of raising, masking
+this ordering requirement entirely; now it's a hard crash unless a source is configured before any
+router import. `app/main.py` imports this module first, deliberately, for the same reason - see its
+own comment.
 """
 
 import asyncio
@@ -102,3 +111,8 @@ async def stop_registry_refresh_task(task: asyncio.Task[None], client: httpx.Asy
     with contextlib.suppress(asyncio.CancelledError):
         await task
     await client.aclose()
+
+
+# Module-import-time side effect - see module docstring. Cheap (no I/O, just object construction)
+# and safe to redo again from `lifespan` at real startup.
+configure_client_registry_source()
