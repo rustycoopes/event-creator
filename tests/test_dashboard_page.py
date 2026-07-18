@@ -87,7 +87,7 @@ async def test_dashboard_page_applies_the_hosts_dark_mode_preference(
     response = await client.get("/dashboard", cookies={"organizeme_auth": token})
 
     assert response.status_code == 200
-    assert 'data-theme="dark"' in response.text
+    assert '<html lang="en" class="dark">' in response.text
 
 
 async def test_dashboard_page_defaults_to_light_mode(
@@ -99,7 +99,7 @@ async def test_dashboard_page_defaults_to_light_mode(
     response = await client.get("/dashboard", cookies={"organizeme_auth": token})
 
     assert response.status_code == 200
-    assert 'data-theme="corporate"' in response.text
+    assert '<html lang="en" class="">' in response.text
 
 
 async def test_dashboard_renders_a_collapsed_event_creator_group_from_the_hosts_preference(

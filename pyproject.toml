@@ -46,6 +46,12 @@ dev = [
     "mypy>=1.13",
     "types-python-dateutil>=2.9.0.20260518",
 ]
+# Build-only: the standalone Tailwind CLI binary (~35-40MB) + this package. Installed in the
+# Docker build stage only (`uv sync --group build`) and never in the runtime stage
+# (`uv sync --no-dev` excludes every non-default group) - see Dockerfile.
+build = [
+    "pytailwindcss==0.3.1",
+]
 
 [tool.mypy]
 strict = true

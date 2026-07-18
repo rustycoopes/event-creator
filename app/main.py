@@ -1,7 +1,9 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.events import router as events_router
 from app.api.v1.import_pending_files import router as import_pending_files_router
@@ -26,6 +28,8 @@ from app.pages.prompt import router as prompt_router
 from app.pages.settings_fragments import router as settings_fragments_router
 from app.pages.upload import router as upload_page_router
 
+BASE_DIR = Path(__file__).resolve().parent
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -47,6 +51,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Event Creator", lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
 app.include_router(dashboard_router)
 app.include_router(prompt_router)
