@@ -65,16 +65,20 @@ async def _refresh_loop(
     token_provider = build_default_token_provider(settings.registry_host_url)
     fresh_since: str | None = None
     while True:
-        await asyncio.sleep(settings.registry_refresh_interval_seconds)
         try:
             apps = await fetch_registry_once(client, settings.registry_host_url, token_provider)
         except Exception:
             state = f"stale-since-{fresh_since}" if fresh_since else "still-on-cold-start-default"
             logger.warning("registry refresh: fetch failed, serving %s", state, exc_info=True)
-            continue
-        source.update(apps)
-        fresh_since = "now"
-        logger.info("registry refresh: freshly-refreshed (%d apps)", len(apps))
+        else:
+            source.update(apps)
+            fresh_since = "now"
+            logger.info("registry refresh: freshly-refreshed (%d apps)", len(apps))
+        # Fetches immediately on startup, then waits between subsequent attempts - a fresh
+        # instance (e.g. after a Cloud Run scale-to-zero cold start) shouldn't serve only its
+        # self-only default for a full registry_refresh_interval_seconds before ever trying the
+        # Host, per the PRD's "Cold-start fallback" intent (organize-me#218 review feedback).
+        await asyncio.sleep(settings.registry_refresh_interval_seconds)
 
 
 def configure_client_registry_source() -> FetchedRegistrySource:

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "OrganizeMe platform restructure — independent Event Creator service (Cloud Run + FastAPI), trusting the Host-issued JWT for SSO"
 requires-python = ">=3.12"
 dependencies = [
-    "organizeme-chrome @ git+https://github.com/rustycoopes/organize-me@chrome-v0.6.0#subdirectory=packages/chrome",
+    "organizeme-chrome @ git+https://github.com/rustycoopes/organize-me@chrome-v0.6.1#subdirectory=packages/chrome",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "jinja2>=3.1",

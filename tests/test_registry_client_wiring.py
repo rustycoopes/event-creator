@@ -18,7 +18,7 @@ from app.core.registry import (
     start_registry_refresh_task,
     stop_registry_refresh_task,
 )
-from organizeme_chrome.registry import AppEntry, _CompiledRegistrySource, configure_registry_source, list_apps
+from organizeme_chrome.registry import AppEntry, list_apps, reset_to_default_registry_source
 
 
 @pytest.fixture(autouse=True)
@@ -30,7 +30,7 @@ def _restore_default_registry_source() -> Iterator[None]:
     try:
         yield
     finally:
-        configure_registry_source(_CompiledRegistrySource())
+        reset_to_default_registry_source()
 
 
 def _settings(**overrides: object) -> Settings:
