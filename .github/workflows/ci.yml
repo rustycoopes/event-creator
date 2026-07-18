@@ -88,6 +88,20 @@ jobs:
       - name: Configure Docker for Artifact Registry
         run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
 
+      # Registry-decoupling (organize-me#218): the Host's own Cloud Run URL, looked up live
+      # (rather than hardcoded) since it's known in advance - the Host already exists in this
+      # environment before this migration deploys - but its exact *.run.app suffix isn't worth
+      # duplicating as a literal anywhere. Not a self-referential capture (this describes a
+      # *different*, already-deployed service), so no follow-up-update step is needed the way
+      # PIPELINE_ENDPOINT_URL below needs one for this service's own URL.
+      - name: Look up the Host's (organize-me) Cloud Run URL
+        id: registry_host
+        run: |
+          HOST_URL=$(gcloud run services describe organizeme-qa \
+            --region=${{ env.GCP_REGION }} --project=${{ env.GCP_PROJECT_ID }} \
+            --format='value(status.url)')
+          echo "url=${HOST_URL}" >> "$GITHUB_OUTPUT"
+
       # JWT_SECRET, ENCRYPTION_KEY, and the two OAuth client *secrets* are intentionally absent
       # here: all four are wired below via --set-secrets from GCP Secret Manager (`jwt-secret-qa`,
       # `encryption-key-qa` shared with the Host per R4/R6; `google-oauth-client-secret-qa`/
@@ -118,6 +132,7 @@ jobs:
           TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
           TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
           TWILIO_PHONE_NUMBER: ${{ secrets.TWILIO_PHONE_NUMBER }}
+          REGISTRY_HOST_URL: ${{ steps.registry_host.outputs.url }}
         run: |
           cat > /tmp/cloud-run-env.yaml <<EOF
           DATABASE_URL: "${DATABASE_URL}"
@@ -131,6 +146,7 @@ jobs:
           TWILIO_AUTH_TOKEN: "${TWILIO_AUTH_TOKEN}"
           TWILIO_PHONE_NUMBER: "${TWILIO_PHONE_NUMBER}"
           E2E_TEST_MODE: "true"
+          REGISTRY_HOST_URL: "${REGISTRY_HOST_URL}"
           GCP_PROJECT_ID: "${{ env.GCP_PROJECT_ID }}"
           CLOUD_TASKS_LOCATION: "${{ env.GCP_REGION }}"
           CLOUD_TASKS_QUEUE: "event-creator-pipeline-qa"

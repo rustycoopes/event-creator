@@ -76,6 +76,15 @@ class Settings(BaseSettings):
     # domain. Cloud Tasks pushes directly to the Cloud Run URL, bypassing the LB, so the OIDC
     # audience and the push target both need this service's real address, not the shared domain.
     pipeline_endpoint_url: str = ""
+    # Registry-decoupling (organize-me#218): the Host's own Cloud Run URL - known in advance (the
+    # Host already exists in both environments), so unlike pipeline_endpoint_url this is a plain
+    # env var set directly in deploy.yml/ci.yml, no post-deploy capture step needed. Empty default
+    # so local dev/CI that hasn't set it yet still starts; the background refresh loop just never
+    # succeeds, and this service keeps serving its self-only cold-start default (see
+    # docs/adr/registry-decoupling-endpoint-auth.md).
+    registry_host_url: str = ""
+    registry_refresh_interval_seconds: float = 60
+    registry_fetch_timeout_seconds: float = 5
 
 
 @lru_cache
