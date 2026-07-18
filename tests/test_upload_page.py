@@ -68,7 +68,9 @@ async def test_upload_page_renders_the_hosts_collapsed_group_preference(
     response = await client.get("/upload", cookies={"organizeme_auth": token})
 
     assert response.status_code == 200
-    assert "storedCollapsed: {&#34;event-creator&#34;: true}" in response.text
+    # Key:value pair, not the whole object literal - the registry now has more than one app, so
+    # asserting the full "{...}" would break every time an app is added to the registry.
+    assert "&#34;event-creator&#34;: true" in response.text
 
 
 async def test_upload_page_warns_when_storage_not_connected_with_ephemeral_fallback(

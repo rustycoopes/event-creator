@@ -117,7 +117,11 @@ async def test_dashboard_renders_a_collapsed_event_creator_group_from_the_hosts_
     response = await client.get("/dashboard", cookies={"organizeme_auth": token})
 
     assert response.status_code == 200
-    assert "storedCollapsed: {&#34;event-creator&#34;: true}" in response.text
+    # Checks the key:value pair, not the whole storedCollapsed object literal - the registry now
+    # has more than one app (organize-me, doc-library, ...), so the rendered JSON has more keys
+    # than just event-creator's; asserting on the full "{...}" would break every time an app is
+    # added to the registry, which isn't what this test is actually regression-testing for.
+    assert "&#34;event-creator&#34;: true" in response.text
 
 
 async def test_dashboard_defaults_to_expanded_when_no_preference_is_stored(
@@ -129,7 +133,7 @@ async def test_dashboard_defaults_to_expanded_when_no_preference_is_stored(
     response = await client.get("/dashboard", cookies={"organizeme_auth": token})
 
     assert response.status_code == 200
-    assert "storedCollapsed: {&#34;event-creator&#34;: false}" in response.text
+    assert "&#34;event-creator&#34;: false" in response.text
 
 
 async def test_no_date_placeholder_when_date_unresolved(
