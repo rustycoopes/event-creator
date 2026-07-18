@@ -17,7 +17,6 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from organizeme_chrome.jwt_verify import ALGORITHM, TOKEN_AUDIENCE
-from organizeme_chrome.registry import reset_registry_source
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
@@ -25,19 +24,23 @@ from app.core.registry import configure_client_registry_source
 
 JWT_SECRET = "test-jwt-secret"
 
+# Registry-decoupling Slice 3 (organize-me#220) deleted organizeme_chrome's compiled-in fallback
+# that every page-render test here (test_dashboard_page.py etc.) used to read implicitly. Some
+# app modules (app.core.templating) call organizeme_chrome.registry.get_app() at *import* time,
+# before any pytest fixture can run - this repo's tests/conftest.py `client` fixture uses a plain
+# ASGITransport, which never runs app.main's `lifespan` (the thing that normally calls this in
+# production), so it must be configured here, at conftest.py's own module-import time, which
+# happens before pytest collects (and thus imports) any test module in this directory.
+configure_client_registry_source()
+
 
 @pytest.fixture(autouse=True)
-def _configure_registry_source() -> Iterator[None]:
-    # Registry-decoupling Slice 3 (organize-me#220) deleted organizeme_chrome's compiled-in
-    # fallback that every page-render test here (test_dashboard_page.py etc.) used to read
-    # implicitly - this repo's tests/conftest.py `client` fixture uses a plain ASGITransport,
-    # which never runs app.main's `lifespan` (the thing that normally calls this in production),
-    # so tests must wire it themselves.
+def _reconfigure_registry_source_between_tests() -> Iterator[None]:
+    # test_registry_client_wiring.py's own tests call configure_client_registry_source() to
+    # install their own FetchedRegistrySource - reconfigure a fresh one after every test so a
+    # mutated/updated cache never leaks into whichever test runs next.
+    yield
     configure_client_registry_source()
-    try:
-        yield
-    finally:
-        reset_registry_source()
 
 
 @pytest.fixture(autouse=True)
