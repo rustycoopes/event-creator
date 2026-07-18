@@ -53,7 +53,13 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --frozen --group dev
+        run: uv sync --frozen --group dev --group build
+
+      - name: Build Tailwind CSS
+        run: uv run python scripts/build_css.py
+
+      - name: Verify compiled CSS is non-empty and contains the canary utility class
+        run: uv run python scripts/verify_css_build.py
 
       - name: Run Alembic migrations (Supabase prod, event_creator schema)
         run: uv run alembic upgrade head

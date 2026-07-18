@@ -45,7 +45,7 @@ async def test_processing_run_detail_page_applies_the_hosts_dark_mode_preference
     )
 
     assert response.status_code == 200
-    assert 'data-theme="dark"' in response.text
+    assert '<html lang="en" class="dark">' in response.text
 
 
 async def test_processing_run_detail_page_defaults_to_light_mode(
@@ -62,7 +62,7 @@ async def test_processing_run_detail_page_defaults_to_light_mode(
     )
 
     assert response.status_code == 200
-    assert 'data-theme="corporate"' in response.text
+    assert '<html lang="en" class="">' in response.text
 
 
 async def test_processing_run_detail_page_renders_the_hosts_collapsed_group_preference(

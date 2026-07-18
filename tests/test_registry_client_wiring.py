@@ -6,7 +6,6 @@ loop directly" guidance.
 """
 
 import asyncio
-from collections.abc import Iterator
 
 import pytest
 
@@ -18,19 +17,13 @@ from app.core.registry import (
     start_registry_refresh_task,
     stop_registry_refresh_task,
 )
-from organizeme_chrome.registry import AppEntry, list_apps, reset_to_default_registry_source
+from organizeme_chrome.registry import AppEntry, list_apps
 
-
-@pytest.fixture(autouse=True)
-def _restore_default_registry_source() -> Iterator[None]:
-    # This module's tests call configure_client_registry_source(), mutating the process-global
-    # registry source organizeme_chrome.list_apps()/get_app() read from. Every other test in this
-    # suite (e.g. test_dashboard_page.py's sidebar assertions) expects the untouched compiled-in
-    # fallback, so it's restored here regardless of how a test ends.
-    try:
-        yield
-    finally:
-        reset_to_default_registry_source()
+# Registry-decoupling Slice 3 (organize-me#220): tests/conftest.py's `_configure_registry_source`
+# autouse fixture already calls configure_client_registry_source() before every test in this suite
+# and reset_registry_source() after - this module's tests re-call configure_client_registry_source()
+# themselves to get a fresh FetchedRegistrySource per test, and the conftest fixture's teardown
+# covers restoring global state afterward, so no module-local fixture is needed here anymore.
 
 
 def _settings(**overrides: object) -> Settings:
