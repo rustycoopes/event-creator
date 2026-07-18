@@ -13,6 +13,12 @@ from app.api.v1.storage_dropbox import router as storage_dropbox_router
 from app.api.v1.storage_google_drive import router as storage_google_drive_router
 from app.api.v1.upload import router as upload_router
 from app.api.v1.user_settings import router as user_settings_router
+from app.core.config import get_settings
+from app.core.registry import (
+    configure_client_registry_source,
+    start_registry_refresh_task,
+    stop_registry_refresh_task,
+)
 from app.pages.dashboard import router as dashboard_router
 from app.pages.logs import router as logs_router
 from app.pages.processing import router as processing_router
@@ -23,7 +29,16 @@ from app.pages.upload import router as upload_page_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # Registry-decoupling (organize-me#218): serve this service's own nav/Settings/API surface
+    # (SELF_APP_ENTRY) until the first successful background fetch from the Host replaces it -
+    # see app/core/registry.py and docs/features/registry-decoupling/TDD.md.
+    settings = get_settings()
+    registry_source = configure_client_registry_source()
+    refresh_task, refresh_client = start_registry_refresh_task(registry_source, settings)
+
     yield
+
+    await stop_registry_refresh_task(refresh_task, refresh_client)
     # Imported here, not at module level, so importing app.main (e.g. for /health tests that
     # never touch the DB) doesn't force DATABASE_URL/Settings to be resolved at import time.
     from app.db.session import get_engine
