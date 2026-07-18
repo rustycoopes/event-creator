@@ -10,17 +10,34 @@ os.environ.setdefault("COOKIE_SECURE", "false")
 import json
 import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterator
 
 import jwt
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from organizeme_chrome.jwt_verify import ALGORITHM, TOKEN_AUDIENCE
+from organizeme_chrome.registry import reset_registry_source
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from app.core.registry import configure_client_registry_source
+
 JWT_SECRET = "test-jwt-secret"
+
+
+@pytest.fixture(autouse=True)
+def _configure_registry_source() -> Iterator[None]:
+    # Registry-decoupling Slice 3 (organize-me#220) deleted organizeme_chrome's compiled-in
+    # fallback that every page-render test here (test_dashboard_page.py etc.) used to read
+    # implicitly - this repo's tests/conftest.py `client` fixture uses a plain ASGITransport,
+    # which never runs app.main's `lifespan` (the thing that normally calls this in production),
+    # so tests must wire it themselves.
+    configure_client_registry_source()
+    try:
+        yield
+    finally:
+        reset_registry_source()
 
 
 @pytest.fixture(autouse=True)
