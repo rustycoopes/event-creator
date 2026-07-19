@@ -131,6 +131,9 @@
           />
         </td>
         <td class="{{ TABLE_BODY_CELL_CLASSES }}">
+          {# button()'s attrs is rendered unescaped (| safe) - only safe to interpolate event.id
+             here because it's a server-generated UUID (hex digits + hyphens only, see the
+             module docstring above); never widen this to any value that could contain a quote. #}
           {{ button("Delete", variant="danger", attrs='@click="openConfirm(\'' ~ event.id ~ '\')"') }}
         </td>
       </tr>
