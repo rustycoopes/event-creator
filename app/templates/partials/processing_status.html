@@ -3,23 +3,26 @@
   R8/R9). Rendered on first paint and swapped in by the `run-status` SSE event. `run_status` is
   the run's status value (pending/in_progress/success/failed). data-run-status is asserted on by
   tests.
+
+  event-creator#26: rebuilt on organizeme_chrome's shared alert primitive (DaisyUI's alert/alert-*
+  classes had zero CSS behind them). The "failed" case is hand-rolled from ALERT_VARIANT_CLASSES
+  directly rather than the alert() macro, since it needs an embedded <a> link and the macro's
+  message param is escaped plain text.
 #}
+{% from "components/alert.html" import alert %}
 <div data-run-status="{{ run_status }}">
   {% if run_status == "success" %}
-  <div role="alert" class="alert alert-success">
-    <span>Processing complete — all steps finished.</span>
-  </div>
+  {{ alert("Processing complete — all steps finished.", variant="success") }}
   {% elif run_status == "failed" %}
-  <div role="alert" class="alert alert-error">
-    <span>Processing failed. <a href="/logs" class="link">View the logs</a> to see what went wrong.</span>
+  <div role="alert" aria-live="polite" class="flex items-center gap-2 rounded-md border px-4 py-3 font-body text-sm {{ ALERT_VARIANT_CLASSES['danger'] }}">
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 shrink-0">
+      <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.63-1.516 2.63H3.72c-1.347 0-2.189-1.463-1.516-2.63L8.485 2.495ZM10 6a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 6Zm0 8a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z" clip-rule="evenodd" />
+    </svg>
+    <span>Processing failed. <a href="/logs" class="underline hover:no-underline">View the logs</a> to see what went wrong.</span>
   </div>
   {% elif run_status == "in_progress" %}
-  <div role="alert" class="alert alert-info">
-    <span>Processing in progress…</span>
-  </div>
+  {{ alert("Processing in progress…", variant="info") }}
   {% else %}
-  <div role="alert" class="alert">
-    <span>Waiting to start…</span>
-  </div>
+  {{ alert("Waiting to start…", variant="neutral") }}
   {% endif %}
 </div>

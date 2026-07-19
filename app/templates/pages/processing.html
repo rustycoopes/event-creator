@@ -13,11 +13,12 @@
 {% endblock %}
 
 {% block page %}
+{% from "components/button.html" import button %}
 <div class="mx-auto max-w-2xl">
-  <h1 class="text-2xl font-bold">Processing</h1>
+  <h1 class="font-display text-2xl font-bold text-ink dark:text-paper">Processing</h1>
 
   {% if run_id %}
-  <p class="mt-1 text-sm opacity-70">
+  <p class="mt-1 font-body text-sm text-ink-2 dark:text-paper-2">
     Watching <span class="font-medium">{{ filename }}</span> as it's processed.
   </p>
 
@@ -32,9 +33,12 @@
       {% include "partials/processing_status.html" %}
     </div>
 
-    <ol id="pipeline-steps" class="flex flex-col gap-2">
+    {# event-creator#26: the border-l "rail" connects every step's marker (absolutely positioned
+       by partials/processing_step.html, centered on this line) into one visual pipeline instead
+       of a flat badge list - see that partial's own comment for the positioning math. #}
+    <ol id="pipeline-steps" class="ml-3 flex flex-col border-l-2 border-ink-2/20 dark:border-paper-2/20">
       {% for step in steps %}
-      <li class="rounded-lg border border-base-300 p-3">
+      <li class="relative py-3 pl-6 first:pt-0 last:pb-0">
         <div
           id="step-{{ step.number }}"
           class="flex w-full items-center gap-3"
@@ -48,10 +52,10 @@
   </div>
   {% else %}
   {# No runs yet: steer the user to Upload. #}
-  <div class="mt-6 flex flex-col items-center gap-3 rounded-lg border border-dashed border-base-300 p-8 text-center">
-    <p class="font-medium">No processing runs yet.</p>
-    <p class="text-sm opacity-70">Upload a conversation and its progress will show up here.</p>
-    <a href="/upload" class="btn btn-primary btn-sm">Upload a file</a>
+  <div class="mt-6 flex flex-col items-center gap-3 rounded-lg border border-dashed border-ink-2/30 p-8 text-center dark:border-paper-2/30">
+    <p class="font-body font-medium text-ink dark:text-paper">No processing runs yet.</p>
+    <p class="font-body text-sm text-ink-2 dark:text-paper-2">Upload a conversation and its progress will show up here.</p>
+    {{ button("Upload a file", href="/upload") }}
   </div>
   {% endif %}
 </div>
