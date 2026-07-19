@@ -13,8 +13,6 @@
 {% from "components/select.html" import select %}
 {% from "components/toggle.html" import toggle %}
 {% from "components/button.html" import button %}
-{% set type_options = [("", "All types")] %}
-{% for t in event_types %}{% set _ = type_options.append((t, t)) %}{% endfor %}
 <form
   id="event-filters"
   hx-get="/dashboard"
@@ -43,9 +41,9 @@
   {{ toggle("show_reviewed", label="Show reviewed", checked=filters.show_reviewed, id="filter-show-reviewed") }}
 
   {{ button(
-    "Sort: " + ("Newest first" if filters.sort == "desc" else "Oldest first"),
+    "Sort: " ~ ("Newest first" if filters.sort == "desc" else "Oldest first"),
     href=sort_toggle_url, variant="ghost",
-    attrs='hx-get="' + sort_toggle_url + '" hx-target="#dashboard-body" hx-push-url="true"'
+    attrs='hx-get="' ~ sort_toggle_url ~ '" hx-target="#dashboard-body" hx-push-url="true"'
   ) }}
 </form>
 

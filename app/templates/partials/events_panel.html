@@ -144,13 +144,16 @@
   >
     <h3 class="font-display text-lg font-semibold text-ink dark:text-paper">Delete this event?</h3>
     <p class="mt-1 font-body text-sm text-ink-2 dark:text-paper-2">This cannot be undone.</p>
-    <form method="dialog" class="mt-4 flex justify-end gap-2">
-      {{ button("Cancel", variant="ghost", x_bind_disabled="deleting") }}
+    <div class="mt-4 flex justify-end gap-2">
+      {# button()'s default type="button" never submits the old method="dialog" form (which
+         relied on a native type="submit" Cancel button to close via form submission) - close
+         explicitly via the dialog ref instead, matching organize-me's profile.html precedent. #}
+      {{ button("Cancel", variant="ghost", x_bind_disabled="deleting", attrs='@click="$refs.confirmModal.close()"') }}
       {% call button(type="button", variant="danger", x_bind_disabled="deleting", attrs='@click="confirmDelete"') %}
         <span x-show="!deleting">Delete</span>
         <span x-show="deleting" x-cloak>Deleting...</span>
       {% endcall %}
-    </form>
+    </div>
   </dialog>
 </div>
 

@@ -146,6 +146,10 @@ async def dashboard_page(
         "total_pages": total_pages,
         "total": total,
         "event_types": event_types,
+        # ("", "All types") + one (value, label) pair per type - the select() macro's `options`
+        # shape (components/select.html in organizeme_chrome) - built here rather than in the
+        # template to avoid a Jinja list.append() loop-scoping workaround.
+        "type_options": [("", "All types")] + [(t, t) for t in event_types],
         "has_active_filters": has_active_filters,
         "filters": {
             "type": type or "",
