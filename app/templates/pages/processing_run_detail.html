@@ -57,7 +57,11 @@
     <h2 class="mb-3 text-lg font-semibold">Pipeline Steps</h2>
     <ol class="flex flex-col gap-2">
       {% for step in steps %}
-      <li class="rounded-lg border border-base-300 p-3">
+      {# event-creator#26 (processing_step.html's own redesign): relative + pl-8 give the shared
+         partial's now-absolutely-positioned marker (normally centered on pages/processing.html's
+         connecting rail) room to float inside this card instead of escaping it - this page isn't
+         part of #26's scope otherwise, so its own DaisyUI classes are untouched. #}
+      <li class="relative rounded-lg border border-base-300 p-3 pl-8">
         <div class="flex w-full items-center gap-3" id="step-{{ step.number }}">
           {% include "partials/processing_step.html" %}
         </div>

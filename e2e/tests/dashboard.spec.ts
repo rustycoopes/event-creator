@@ -76,7 +76,7 @@ test.describe('Events dashboard', () => {
 
     // Confirm dialog gates the delete - it must not happen on the first click.
     await expect(page.getByText('E2E test — swim meet.')).toBeVisible();
-    await page.locator('dialog.modal button.btn-error').click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Delete' }).click();
 
     await expect(page.getByText('E2E test — swim meet.')).not.toBeVisible();
     await expect(page.getByText('E2E test — pick up from school.')).toBeVisible();

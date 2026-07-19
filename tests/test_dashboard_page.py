@@ -385,3 +385,7 @@ async def test_delete_button_is_gated_behind_confirm_modal(
     # openConfirm(), not confirmDelete(), on click.
     assert "@click=\"openConfirm(" in response.text
     assert "confirmDelete" in response.text
+    # Cancel must explicitly close the dialog - the button primitive's default type="button"
+    # (organizeme_chrome#26 restyle) doesn't submit the old method="dialog" form the way a
+    # native type="submit" button did, so this regressed once already.
+    assert "$refs.confirmModal.close()" in response.text

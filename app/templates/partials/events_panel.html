@@ -3,7 +3,16 @@
   the actual HTMX swap unit - pagination links here target #dashboard-body (not just this
   fragment's own #events-panel wrapper) so the filter form's sort toggle/hidden field re-render
   too and stay in sync with the page that was just navigated to.
+
+  event-creator#26: table restyled on organizeme_chrome's shared TABLE_* class constants (no
+  <table> macro - column content varies per caller, see docs/adr in organize-me), the confirm
+  dialog restyled on card_shell-equivalent tokens instead of DaisyUI's modal/modal-box classes,
+  and row actions rebuilt on the button primitive. DaisyUI's badge-ghost/link-primary classes
+  (which had zero CSS behind them) are replaced with BADGE_VARIANT_CLASSES["neutral"] and a
+  cobalt-colored link treatment respectively.
 #}
+{% from "components/button.html" import button %}
+{% from "components/alert.html" import alert %}
 {% if total %}
 <p id="events-total-count" class="text-sm opacity-70" data-total="{{ total }}">{{ total }} event{{ "s" if total != 1 else "" }} total</p>
 {% endif %}
@@ -61,86 +70,92 @@
     },
   }'
 >
-  <div role="alert" class="alert alert-error mb-2" x-show="error" x-cloak>
-    <span x-text="error"></span>
-  </div>
+  {{ alert(variant="danger", x_show="error", x_text="error", class_="mb-2") }}
 
-  <table class="table" id="events-table">
+  <table class="{{ TABLE_CLASSES }}" id="events-table">
     <thead>
-      <tr>
-        <th>Type</th>
-        <th>Description</th>
-        <th>Resolved date</th>
-        <th>Raw date text</th>
-        <th>Agreed by</th>
-        <th>Calendar</th>
-        <th>Tasks</th>
-        <th>Reviewed</th>
-        <th></th>
+      <tr class="{{ TABLE_HEAD_ROW_CLASSES }}">
+        <th class="{{ TABLE_HEAD_CELL_CLASSES }}">Type</th>
+        <th class="{{ TABLE_HEAD_CELL_CLASSES }}">Description</th>
+        <th class="{{ TABLE_HEAD_CELL_CLASSES }}">Resolved date</th>
+        <th class="{{ TABLE_HEAD_CELL_CLASSES }}">Raw date text</th>
+        <th class="{{ TABLE_HEAD_CELL_CLASSES }}">Agreed by</th>
+        <th class="{{ TABLE_HEAD_CELL_CLASSES }}">Calendar</th>
+        <th class="{{ TABLE_HEAD_CELL_CLASSES }}">Tasks</th>
+        <th class="{{ TABLE_HEAD_CELL_CLASSES }}">Reviewed</th>
+        <th class="{{ TABLE_HEAD_CELL_CLASSES }}"></th>
       </tr>
     </thead>
     <tbody>
       {% for event in events %}
-      <tr>
-        <td>{{ event.type }}</td>
-        <td>{{ event.description }}</td>
-        <td>{{ event.resolved_date }}</td>
-        <td>{{ event.raw_date_text }}</td>
-        <td>
+      <tr class="{{ TABLE_BODY_ROW_CLASSES }}">
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}">{{ event.type }}</td>
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}">{{ event.description }}</td>
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}">{{ event.resolved_date }}</td>
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}">{{ event.raw_date_text }}</td>
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}">
           {% for name in event.agreed_by %}
-          <span class="badge badge-ghost mr-1" title="{{ name }}" tabindex="0">{{ name | to_initials }}</span>
+          <span
+            class="inline-flex items-center rounded-full px-2 py-0.5 mr-1 font-body text-xs font-medium {{ BADGE_VARIANT_CLASSES['neutral'] }}"
+            title="{{ name }}" tabindex="0"
+          >{{ name | to_initials }}</span>
           {% endfor %}
         </td>
-        <td>
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}">
           {% if event.calendar_url %}
-          <a href="{{ event.calendar_url }}" target="_blank" rel="noopener" class="link link-primary">Add</a>
+          <a
+            href="{{ event.calendar_url }}" target="_blank" rel="noopener"
+            class="font-medium text-cobalt underline-offset-2 hover:underline dark:text-cobalt"
+          >Add</a>
           {% else %}
           <span class="opacity-50 text-sm">No date</span>
           {% endif %}
         </td>
-        <td>
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}">
           {% if event.tasks_url %}
-          <a href="{{ event.tasks_url }}" target="_blank" rel="noopener" class="link link-primary">Add</a>
+          <a
+            href="{{ event.tasks_url }}" target="_blank" rel="noopener"
+            class="font-medium text-cobalt underline-offset-2 hover:underline dark:text-cobalt"
+          >Add</a>
           {% else %}
           <span class="opacity-50 text-sm">No date</span>
           {% endif %}
         </td>
-        <td>
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}">
           <input
             type="checkbox"
-            class="checkbox checkbox-sm"
+            class="h-4 w-4 accent-flame {{ FOCUS_RING }}"
             aria-label="Reviewed"
             {% if event.reviewed %}checked{% endif %}
             @change="toggleReviewed('{{ event.id }}', $event.target.checked, $event.target)"
           />
         </td>
-        <td>
-          <button
-            type="button"
-            class="btn btn-sm btn-outline btn-error"
-            @click="openConfirm('{{ event.id }}')"
-          >
-            Delete
-          </button>
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}">
+          {# button()'s attrs is rendered unescaped (| safe) - only safe to interpolate event.id
+             here because it's a server-generated UUID (hex digits + hyphens only, see the
+             module docstring above); never widen this to any value that could contain a quote. #}
+          {{ button("Delete", variant="danger", attrs='@click="openConfirm(\'' ~ event.id ~ '\')"') }}
         </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 
-  <dialog class="modal" x-ref="confirmModal">
-    <div class="modal-box">
-      <h3 class="font-bold text-lg">Delete this event?</h3>
-      <p class="py-2">This cannot be undone.</p>
-      <div class="modal-action">
-        <form method="dialog" class="flex gap-2">
-          <button class="btn" :disabled="deleting">Cancel</button>
-          <button type="button" class="btn btn-error" :disabled="deleting" @click="confirmDelete">
-            <span x-show="!deleting">Delete</span>
-            <span x-show="deleting" x-cloak>Deleting...</span>
-          </button>
-        </form>
-      </div>
+  <dialog
+    class="rounded-lg border border-ink-2/10 bg-paper p-6 shadow-lg backdrop:bg-ink/50 dark:border-paper/10 dark:bg-ink-2"
+    x-ref="confirmModal"
+  >
+    <h3 class="font-display text-lg font-semibold text-ink dark:text-paper">Delete this event?</h3>
+    <p class="mt-1 font-body text-sm text-ink-2 dark:text-paper-2">This cannot be undone.</p>
+    <div class="mt-4 flex justify-end gap-2">
+      {# button()'s default type="button" never submits the old method="dialog" form (which
+         relied on a native type="submit" Cancel button to close via form submission) - close
+         explicitly via the dialog ref instead, matching organize-me's profile.html precedent. #}
+      {{ button("Cancel", variant="ghost", x_bind_disabled="deleting", attrs='@click="$refs.confirmModal.close()"') }}
+      {% call button(type="button", variant="danger", x_bind_disabled="deleting", attrs='@click="confirmDelete"') %}
+        <span x-show="!deleting">Delete</span>
+        <span x-show="deleting" x-cloak>Deleting...</span>
+      {% endcall %}
     </div>
   </dialog>
 </div>
@@ -148,11 +163,11 @@
 {% if total_pages > 1 %}
 <div class="flex justify-center items-center gap-2 mt-4">
   {% if prev_url %}
-  <a href="{{ prev_url }}" hx-get="{{ prev_url }}" hx-target="#dashboard-body" hx-push-url="true" class="btn btn-sm">Previous</a>
+  {{ button("Previous", href=prev_url, variant="ghost", attrs='hx-get="' ~ prev_url ~ '" hx-target="#dashboard-body" hx-push-url="true"') }}
   {% endif %}
-  <span class="btn btn-sm btn-ghost no-animation">Page {{ page }} of {{ total_pages }}</span>
+  <span class="font-body text-sm text-ink-2 dark:text-paper-2">Page {{ page }} of {{ total_pages }}</span>
   {% if next_url %}
-  <a href="{{ next_url }}" hx-get="{{ next_url }}" hx-target="#dashboard-body" hx-push-url="true" class="btn btn-sm">Next</a>
+  {{ button("Next", href=next_url, variant="ghost", attrs='hx-get="' ~ next_url ~ '" hx-target="#dashboard-body" hx-push-url="true"') }}
   {% endif %}
 </div>
 {% endif %}
