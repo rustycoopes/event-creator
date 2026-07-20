@@ -9,42 +9,46 @@
 {% endblock %}
 
 {% block page %}
+{# event-creator#30: rebuilt on organizeme_chrome's card_shell primitive (DaisyUI's card/steps
+   classes had zero CSS behind them, same root cause as event-creator#26). #}
+{% from "components/card_shell.html" import card_shell %}
+
 {# Getting Started onboarding checklist. Shown above the events table until all three onboarding
    steps are done, then hidden entirely. Steps and their done-state come from the server-rendered
    onboarding_steps view-model (app/core/onboarding.py) - no live update needed; the state simply
    reflects on the next page load. #}
 {% if not onboarding_complete %}
-<div class="card bg-base-100 shadow-xl mb-4" id="onboarding-checklist">
-  <div class="card-body">
-    <h2 class="card-title">Getting Started</h2>
-    <p class="text-sm opacity-70">Finish setting up Event Creator:</p>
-    <ul class="steps steps-vertical mt-2">
-      {% for step in onboarding_steps %}
-      <li class="step {% if step.done %}step-primary{% endif %}">
-        {% if step.done %}
-        {# sr-only state text: done/to-do is otherwise conveyed only visually (strike-through +
-           colour), which a screen reader can't perceive. #}
-        <span class="line-through opacity-70">{{ step.label }}<span class="sr-only"> (done)</span></span>
-        {% else %}
-        <a href="{{ step.url }}" class="link link-primary">{{ step.label }}<span class="sr-only"> (to do)</span></a>
-        {% endif %}
-      </li>
-      {% endfor %}
-    </ul>
-  </div>
+<div class="mb-4">
+{% call card_shell(title="Getting Started") %}
+<div id="onboarding-checklist">
+  <p class="font-body text-sm text-ink-2 dark:text-paper-2">Finish setting up Event Creator:</p>
+  <ul class="mt-2 flex flex-col gap-2">
+    {% for step in onboarding_steps %}
+    <li class="flex items-center gap-2">
+      <span class="h-2 w-2 shrink-0 rounded-full {{ 'bg-sage' if step.done else 'bg-ink-2/30 dark:bg-paper-2/30' }}"></span>
+      {% if step.done %}
+      {# sr-only state text: done/to-do is otherwise conveyed only visually (strike-through +
+         colour), which a screen reader can't perceive. #}
+      <span class="font-body text-sm text-ink-2 line-through dark:text-paper-2">{{ step.label }}<span class="sr-only"> (done)</span></span>
+      {% else %}
+      <a href="{{ step.url }}" class="font-body text-sm font-medium text-cobalt underline-offset-2 hover:underline dark:text-cobalt">{{ step.label }}<span class="sr-only"> (to do)</span></a>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</div>
+{% endcall %}
 </div>
 {% endif %}
 
-<div class="card bg-base-100 shadow-xl">
-  <div class="card-body">
-    <div class="flex items-center justify-between flex-wrap gap-2">
-      <h1 class="card-title">Dashboard</h1>
-      {% include "partials/import_pending_button.html" %}
-    </div>
-
-    <div id="dashboard-body">
-      {% include "partials/dashboard_body.html" %}
-    </div>
-  </div>
+{% call card_shell() %}
+<div class="flex items-center justify-between flex-wrap gap-2">
+  <h1 class="font-display text-lg font-semibold text-ink dark:text-paper">Dashboard</h1>
+  {% include "partials/import_pending_button.html" %}
 </div>
+
+<div id="dashboard-body">
+  {% include "partials/dashboard_body.html" %}
+</div>
+{% endcall %}
 {% endblock %}

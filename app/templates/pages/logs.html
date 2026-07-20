@@ -9,13 +9,12 @@
 {% endblock %}
 
 {% block page %}
-<div class="card bg-base-100 shadow-xl">
-  <div class="card-body">
-    <h1 class="card-title">Logs</h1>
-
-    <div id="logs-body">
-      {% include "partials/logs_body.html" %}
-    </div>
-  </div>
+{# event-creator#30: rebuilt on organizeme_chrome's card_shell primitive (DaisyUI's card classes
+   had zero CSS behind them, same root cause as event-creator#26). #}
+{% from "components/card_shell.html" import card_shell %}
+{% call card_shell(title="Logs") %}
+<div id="logs-body">
+  {% include "partials/logs_body.html" %}
 </div>
+{% endcall %}
 {% endblock %}

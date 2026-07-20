@@ -3,7 +3,12 @@
   Slice R8 (app.api.v1.import_pending_files) has a UI entry point. Requires `drive_connected` in
   the including template's context, same flag app.pages.dashboard computes. Single-quoted x-data
   so the double-quoted JS strings inside don't terminate the attribute.
+
+  event-creator#30: rebuilt on the shared button/alert primitives (DaisyUI's btn-outline/alert-error
+  classes had zero CSS behind them, same root cause as event-creator#26).
 #}
+{% from "components/button.html" import button %}
+{% from "components/alert.html" import alert %}
 <div
   x-data='{
     importing: false,
@@ -36,17 +41,9 @@
     },
   }'
 >
-  <button
-    id="import-pending-files-btn"
-    type="button"
-    class="btn btn-outline btn-sm"
-    :disabled="importing || !driveConnected"
-    @click="importPending()"
-  >
+  {% call button(id="import-pending-files-btn", variant="ghost", x_bind_disabled="importing || !driveConnected", attrs='@click="importPending()"') %}
     <span x-show="!importing">Import pending files</span>
     <span x-show="importing" x-cloak>Importing…</span>
-  </button>
-  <div role="alert" class="alert alert-error mt-2" x-show="error" x-cloak>
-    <span x-text="error"></span>
-  </div>
+  {% endcall %}
+  {{ alert(variant="danger", x_show="error", x_text="error", class_="mt-2") }}
 </div>
