@@ -11,7 +11,15 @@
   Single-quoted x-data so the double-quoted JS strings inside don't terminate the attribute (the
   register.html bug from organize-me issue #23, guarded here by the same regression tests ported
   from tests/test_settings_page.py). storage_data seeds provider + folder_path from the server.
+
+  event-creator#30: rebuilt on organizeme_chrome's shared alert/select/input/button/badge
+  primitives (DaisyUI's alert/select-bordered/input-bordered/btn/badge classes had zero CSS
+  behind them, same root cause as event-creator#26).
 #}
+{% from "components/alert.html" import alert %}
+{% from "components/input.html" import input %}
+{% from "components/button.html" import button %}
+{% from "components/badge.html" import badge %}
 <div
   id="storage-tab-panel"
   x-data='{
@@ -111,29 +119,31 @@
     },
   }'
 >
-  <div role="alert" class="alert alert-success mt-2" x-show="success" x-cloak>
-    <span>Storage settings saved.</span>
-  </div>
-  <div role="alert" class="alert alert-info mt-2" x-show="notice" x-cloak>
-    <span x-text="notice"></span>
-  </div>
-  <div role="alert" class="alert alert-error mt-2" x-show="error" x-cloak>
-    <span x-text="error"></span>
-  </div>
+  {{ alert(variant="success", x_show="success", x_text="'Storage settings saved.'", class_="mt-2") }}
+  {{ alert(variant="info", x_show="notice", x_text="notice", class_="mt-2") }}
+  {{ alert(variant="danger", x_show="error", x_text="error", class_="mt-2") }}
 
-  <label class="form-control w-full">
-    <div class="label"><span class="label-text">Storage provider</span></div>
-    <select
-      id="provider"
-      name="provider"
-      x-model="provider"
-      class="select select-bordered w-full"
-    >
-      <option value="google_drive" {% if storage_data.provider == "google_drive" %}selected{% endif %}>Google Drive</option>
-      <option value="dropbox" {% if storage_data.provider == "dropbox" %}selected{% endif %}>Dropbox</option>
-      <option value="s3" {% if storage_data.provider == "s3" %}selected{% endif %}>Amazon S3</option>
-    </select>
-  </label>
+  {# Hand-rolled rather than components/select.html's select() macro: that macro has no escape
+     hatch for an Alpine x-model binding (unlike input()'s `attrs` param), and this field's value
+     is entirely client-driven. Classes mirror select.html's own markup exactly. #}
+  <div class="flex flex-col gap-1 w-full">
+    <label for="provider" class="font-body text-sm font-medium text-ink dark:text-paper">Storage provider</label>
+    <div class="relative">
+      <select
+        id="provider"
+        name="provider"
+        x-model="provider"
+        class="w-full appearance-none rounded-md border pr-8 {{ INPUT_DEFAULT_FILL }} font-body text-ink dark:text-paper {{ FOCUS_RING }} {{ DENSITY_PADDING['product'] }} {{ INPUT_DEFAULT_BORDER }}"
+      >
+        <option value="google_drive" {% if storage_data.provider == "google_drive" %}selected{% endif %}>Google Drive</option>
+        <option value="dropbox" {% if storage_data.provider == "dropbox" %}selected{% endif %}>Dropbox</option>
+        <option value="s3" {% if storage_data.provider == "s3" %}selected{% endif %}>Amazon S3</option>
+      </select>
+      <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="pointer-events-none absolute right-2 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-2 dark:text-paper-2">
+        <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z" clip-rule="evenodd" />
+      </svg>
+    </div>
+  </div>
 
   {# Google Drive + Dropbox share the same folder-path form: both are live-wired providers. #}
   <form
@@ -141,62 +151,42 @@
     x-show="provider === 'google_drive' || provider === 'dropbox'"
     @submit.prevent="save"
   >
-    <label class="form-control w-full">
-      <div class="label"><span class="label-text">Folder path</span></div>
-      <input
-        type="text"
-        id="folder_path"
-        name="folder_path"
-        x-model="folder_path"
-        value="{{ storage_data.folder_path }}"
-        placeholder="/OrganizeMe"
-        required
-        class="input input-bordered w-full"
-      />
-    </label>
-    <button type="submit" class="btn btn-primary mt-2" :disabled="saving">
+    {{ input(
+      "folder_path", label="Folder path", value=storage_data.folder_path,
+      placeholder="/OrganizeMe", id="folder_path", required=True, attrs='x-model="folder_path"'
+    ) }}
+    {% call button(type="submit", class_="mt-2", x_bind_disabled="saving") %}
       <span x-show="!saving">Save changes</span>
       <span x-show="saving" x-cloak>Saving...</span>
-    </button>
+    {% endcall %}
   </form>
 
   {# Google Drive connection controls. Connect starts the OAuth redirect; Disconnect clears the
      stored tokens. type="button" so they never submit the folder-path form. #}
   <div class="mt-4" x-show="provider === 'google_drive'" x-cloak>
-    <div class="divider"></div>
+    <hr class="border-ink-2/10 dark:border-paper-2/10" />
 
-    <div x-show="is_connected" x-cloak>
+    <div class="mt-4" x-show="is_connected" x-cloak>
       <div class="flex items-center gap-2">
-        <span class="badge badge-success">Connected</span>
-        <span class="text-sm opacity-70">Google Drive is connected.</span>
+        {{ badge("Connected", variant="success") }}
+        <span class="font-body text-sm text-ink-2 dark:text-paper-2">Google Drive is connected.</span>
       </div>
-      <button
-        type="button"
-        id="disconnect-drive"
-        class="btn btn-outline btn-error mt-3"
-        :disabled="disconnecting"
-        @click="disconnect('google-drive')"
-      >
+      {% call button(id="disconnect-drive", variant="danger", class_="mt-3", x_bind_disabled="disconnecting", attrs='@click="disconnect(\'google-drive\')"') %}
         <span x-show="!disconnecting">Disconnect Google Drive</span>
         <span x-show="disconnecting" x-cloak>Disconnecting...</span>
-      </button>
+      {% endcall %}
     </div>
 
-    <div x-show="!is_connected" x-cloak>
-      <p class="text-sm opacity-70" x-show="!has_config">
+    <div class="mt-4" x-show="!is_connected" x-cloak>
+      <p class="font-body text-sm text-ink-2 dark:text-paper-2" x-show="!has_config">
         Save your folder path first, then connect Google Drive.
       </p>
-      <button
-        type="button"
-        id="connect-drive"
-        class="btn btn-primary mt-1"
-        x-show="has_config"
-        :disabled="connecting"
-        @click="connect('google-drive')"
-      >
-        <span x-show="!connecting">Connect Google Drive</span>
-        <span x-show="connecting" x-cloak>Connecting...</span>
-      </button>
+      <div class="mt-1" x-show="has_config">
+        {% call button(id="connect-drive", x_bind_disabled="connecting", attrs='@click="connect(\'google-drive\')"') %}
+          <span x-show="!connecting">Connect Google Drive</span>
+          <span x-show="connecting" x-cloak>Connecting...</span>
+        {% endcall %}
+      </div>
     </div>
   </div>
 
@@ -204,46 +194,35 @@
      dropbox endpoints (Slice R7 resolved decision: wire this up, unlike the monolith which only
      ever built the backend). #}
   <div class="mt-4" x-show="provider === 'dropbox'" x-cloak>
-    <div class="divider"></div>
+    <hr class="border-ink-2/10 dark:border-paper-2/10" />
 
-    <div x-show="is_connected" x-cloak>
+    <div class="mt-4" x-show="is_connected" x-cloak>
       <div class="flex items-center gap-2">
-        <span class="badge badge-success">Connected</span>
-        <span class="text-sm opacity-70">Dropbox is connected.</span>
+        {{ badge("Connected", variant="success") }}
+        <span class="font-body text-sm text-ink-2 dark:text-paper-2">Dropbox is connected.</span>
       </div>
-      <button
-        type="button"
-        id="disconnect-dropbox"
-        class="btn btn-outline btn-error mt-3"
-        :disabled="disconnecting"
-        @click="disconnect('dropbox')"
-      >
+      {% call button(id="disconnect-dropbox", variant="danger", class_="mt-3", x_bind_disabled="disconnecting", attrs='@click="disconnect(\'dropbox\')"') %}
         <span x-show="!disconnecting">Disconnect Dropbox</span>
         <span x-show="disconnecting" x-cloak>Disconnecting...</span>
-      </button>
+      {% endcall %}
     </div>
 
-    <div x-show="!is_connected" x-cloak>
-      <p class="text-sm opacity-70" x-show="!has_config">
+    <div class="mt-4" x-show="!is_connected" x-cloak>
+      <p class="font-body text-sm text-ink-2 dark:text-paper-2" x-show="!has_config">
         Save your folder path first, then connect Dropbox.
       </p>
-      <button
-        type="button"
-        id="connect-dropbox"
-        class="btn btn-primary mt-1"
-        x-show="has_config"
-        :disabled="connecting"
-        @click="connect('dropbox')"
-      >
-        <span x-show="!connecting">Connect Dropbox</span>
-        <span x-show="connecting" x-cloak>Connecting...</span>
-      </button>
+      <div class="mt-1" x-show="has_config">
+        {% call button(id="connect-dropbox", x_bind_disabled="connecting", attrs='@click="connect(\'dropbox\')"') %}
+          <span x-show="!connecting">Connect Dropbox</span>
+          <span x-show="connecting" x-cloak>Connecting...</span>
+        {% endcall %}
+      </div>
     </div>
   </div>
 
   {# S3 is reserved in the provider enum but has no write-endpoint/UI yet (kept a "coming soon"
      stub, matching today's actual monolith behaviour - issue #95 was never built there either). #}
   <div class="mt-4" x-show="provider === 's3'" x-cloak>
-    <p class="text-sm opacity-70">Amazon S3 support is coming soon.</p>
+    <p class="font-body text-sm text-ink-2 dark:text-paper-2">Amazon S3 support is coming soon.</p>
   </div>
 </div>

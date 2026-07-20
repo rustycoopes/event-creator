@@ -3,111 +3,120 @@
 {% block title %}Upload — Event Creator{% endblock %}
 
 {% block page %}
+{# event-creator#30: rebuilt on organizeme_chrome's shared card_shell/alert primitives (DaisyUI's
+   card/alert classes had zero CSS behind them, same root cause as event-creator#26); dropzone
+   restyled on design tokens instead of unresolved DaisyUI theme colors (border-base-300/
+   bg-base-200/border-primary). #}
+{% from "components/card_shell.html" import card_shell %}
+{% from "components/alert.html" import alert %}
 <div class="flex justify-center">
-  <div class="card w-full max-w-lg bg-base-100 shadow-xl">
-    <div class="card-body">
-      <h1 class="card-title">Upload a conversation</h1>
-      <p class="text-sm opacity-70">
-        Upload a WhatsApp export (<code>.txt</code>, <code>.zip</code>, or <code>.csv</code>). We'll
-        extract the agreed events and add them to your dashboard.
-      </p>
+  <div class="w-full max-w-lg">
+  {% call card_shell(title="Upload a conversation") %}
+    <p class="font-body text-sm text-ink-2 dark:text-paper-2">
+      Upload a WhatsApp export (<code>.txt</code>, <code>.zip</code>, or <code>.csv</code>). We'll
+      extract the agreed events and add them to your dashboard.
+    </p>
 
-      {#
-        Single-quoted x-data so the double-quoted JS strings inside don't terminate the attribute.
-        drive_connected and using_ephemeral seed the storage status.
-      #}
-      <div
-        class="mt-4"
-        x-data='{
-          uploading: false,
-          error: "",
-          dragover: false,
-          driveConnected: {{ drive_connected | tojson }},
-          usingEphemeral: {{ using_ephemeral | tojson }},
-          async submitFile(fileList) {
-            if (!fileList || !fileList.length) return;
-            this.error = "";
-            this.uploading = true;
-            try {
-              const form = new FormData();
-              form.append("file", fileList[0]);
-              const response = await fetch("/api/v1/upload", { method: "POST", body: form });
-              const data = await response.json().catch(() => ({}));
-              if (!response.ok) {
-                this.error = this.messageFor(data.detail) || "Upload failed. Please try again.";
-                this.uploading = false;
-                return;
-              }
-              window.location = "/processing?run=" + encodeURIComponent(data.run_id);
-            } catch (e) {
-              this.error = "Upload failed. Please try again.";
+    {#
+      Single-quoted x-data so the double-quoted JS strings inside don't terminate the attribute.
+      drive_connected and using_ephemeral seed the storage status.
+    #}
+    <div
+      class="mt-4"
+      x-data='{
+        uploading: false,
+        error: "",
+        dragover: false,
+        driveConnected: {{ drive_connected | tojson }},
+        usingEphemeral: {{ using_ephemeral | tojson }},
+        async submitFile(fileList) {
+          if (!fileList || !fileList.length) return;
+          this.error = "";
+          this.uploading = true;
+          try {
+            const form = new FormData();
+            form.append("file", fileList[0]);
+            const response = await fetch("/api/v1/upload", { method: "POST", body: form });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+              this.error = this.messageFor(data.detail) || "Upload failed. Please try again.";
               this.uploading = false;
+              return;
             }
-          },
-          messageFor(detail) {
-            const map = {
-              unsupported_file_type: "Please upload a .txt, .zip, or .csv file.",
-              file_too_large: "That file is too large (the maximum is 10 MB).",
-              empty_file: "That file is empty.",
-              storage_error: "Could not reach your storage provider. Try reconnecting it in Settings, or try again in a moment.",
-            };
-            return map[detail];
-          },
-        }'
-      >
-        {# Storage not connected: show a warning (issue #79). Uploads proceed with ephemeral storage. #}
-        <div role="alert" class="alert alert-info" x-show="usingEphemeral" x-cloak>
-          <span>
-            No storage provider is connected. Files uploaded here will be processed but not
-            permanently stored. Connect a storage provider in
-            <a href="/settings" class="link">Settings</a>
-            to enable automatic storage.
-          </span>
-        </div>
-
-        <div role="alert" class="alert alert-error mt-2" x-show="error" x-cloak>
-          <span x-text="error"></span>
-        </div>
-
-        {# Drag-and-drop zone. Clicking it opens the hidden file picker; dropping a file uploads it. #}
-        {# Always enabled; falls back to ephemeral storage if not connected (issue #79). #}
-        <div
-          id="upload-dropzone"
-          class="mt-4 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-base-300 p-8 text-center transition-colors"
-          :class="{ 'border-primary bg-base-200': dragover }"
-          @dragover.prevent="dragover = true"
-          @dragleave.prevent="dragover = false"
-          @drop.prevent="dragover = false; submitFile($event.dataTransfer.files)"
-          @click="$refs.fileInput.click()"
-          role="button"
-          tabindex="0"
-          aria-label="Upload a file by dragging it here or clicking to browse"
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.9A5 5 0 1115.9 6.1 4.5 4.5 0 0117 15h-1m-5-2v9m0-9l-3 3m3-3l3 3" />
-          </svg>
-          <p class="font-medium" x-show="!uploading">
-            Drag a file here, or <span class="link link-primary">browse</span>
-          </p>
-          <p class="font-medium" x-show="uploading" x-cloak>Uploading…</p>
-          <p class="text-xs opacity-60">.txt, .zip or .csv · up to 10 MB</p>
-          <input
-            type="file"
-            id="file-input"
-            x-ref="fileInput"
-            class="hidden"
-            accept=".txt,.zip,.csv"
-            @change="submitFile($event.target.files)"
-          />
-        </div>
+            window.location = "/processing?run=" + encodeURIComponent(data.run_id);
+          } catch (e) {
+            this.error = "Upload failed. Please try again.";
+            this.uploading = false;
+          }
+        },
+        messageFor(detail) {
+          const map = {
+            unsupported_file_type: "Please upload a .txt, .zip, or .csv file.",
+            file_too_large: "That file is too large (the maximum is 10 MB).",
+            empty_file: "That file is empty.",
+            storage_error: "Could not reach your storage provider. Try reconnecting it in Settings, or try again in a moment.",
+          };
+          return map[detail];
+        },
+      }'
+    >
+      {# Storage not connected: show a warning (issue #79). Hand-rolled rather than
+         components/alert.html's alert() macro (whose `message` text is HTML-escaped) since this
+         message embeds a <a href="/settings"> link, same pattern as
+         partials/processing_status.html's "failed" case. #}
+      <div role="alert" aria-live="polite" class="flex items-center gap-2 rounded-md border px-4 py-3 font-body text-sm {{ ALERT_VARIANT_CLASSES['info'] }}" x-show="usingEphemeral" x-cloak>
+        <svg aria-hidden="true" viewBox="0 0 20 20" fill="currentColor" class="h-4 w-4 shrink-0">
+          <path fill-rule="evenodd" d="M18 10A8 8 0 1 1 2 10a8 8 0 0 1 16 0Zm-7-4a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM9 9a.75.75 0 0 0 0 1.5h.25v3.25a.75.75 0 0 0 1.5 0v-4A.75.75 0 0 0 10 9H9Z" clip-rule="evenodd" />
+        </svg>
+        <span>
+          No storage provider is connected. Files uploaded here will be processed but not
+          permanently stored. Connect a storage provider in
+          <a href="/settings" class="font-medium underline hover:no-underline">Settings</a>
+          to enable automatic storage.
+        </span>
       </div>
 
-      <div class="divider">or</div>
-      <p class="text-sm opacity-70">
-        Already have files waiting in your connected storage's watch folder?
-      </p>
-      {% include "partials/import_pending_button.html" %}
+      {{ alert(variant="danger", x_show="error", x_text="error", class_="mt-2") }}
+
+      {# Drag-and-drop zone. Clicking it opens the hidden file picker; dropping a file uploads it. #}
+      {# Always enabled; falls back to ephemeral storage if not connected (issue #79). #}
+      <div
+        id="upload-dropzone"
+        class="mt-4 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-ink-2/30 p-8 text-center transition-colors dark:border-paper-2/30"
+        :class="{ 'border-flame bg-flame-tint dark:bg-flame/10': dragover }"
+        @dragover.prevent="dragover = true"
+        @dragleave.prevent="dragover = false"
+        @drop.prevent="dragover = false; submitFile($event.dataTransfer.files)"
+        @click="$refs.fileInput.click()"
+        role="button"
+        tabindex="0"
+        aria-label="Upload a file by dragging it here or clicking to browse"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-ink-2 dark:text-paper-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.9A5 5 0 1115.9 6.1 4.5 4.5 0 0117 15h-1m-5-2v9m0-9l-3 3m3-3l3 3" />
+        </svg>
+        <p class="font-body font-medium text-ink dark:text-paper" x-show="!uploading">
+          Drag a file here, or <span class="font-medium text-cobalt underline-offset-2 hover:underline dark:text-cobalt">browse</span>
+        </p>
+        <p class="font-body font-medium text-ink dark:text-paper" x-show="uploading" x-cloak>Uploading…</p>
+        <p class="font-body text-xs text-ink-2 dark:text-paper-2">.txt, .zip or .csv · up to 10 MB</p>
+        <input
+          type="file"
+          id="file-input"
+          x-ref="fileInput"
+          class="hidden"
+          accept=".txt,.zip,.csv"
+          @change="submitFile($event.target.files)"
+        />
+      </div>
     </div>
+
+    <hr class="mt-4 border-ink-2/10 dark:border-paper-2/10" />
+    <p class="mt-4 font-body text-sm text-ink-2 dark:text-paper-2">
+      Already have files waiting in your connected storage's watch folder?
+    </p>
+    {% include "partials/import_pending_button.html" %}
+  {% endcall %}
   </div>
 </div>
 {% endblock %}

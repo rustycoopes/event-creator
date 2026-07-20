@@ -305,9 +305,13 @@ async def test_logs_shows_run_status_badge_with_correct_color(
     response = await client.get("/logs", cookies=cookies)
 
     body = response.text
-    assert "badge-success" in body
-    assert "badge-error" in body
-    assert "badge-warning" in body
+    # event-creator#30: badges no longer use DaisyUI's badge-success/-error/-warning (dead
+    # classes, no CSS behind them) - success reuses BADGE_VARIANT_CLASSES["success"] (bg-sage-tint),
+    # failed/in_progress reuse ["primary"]/["secondary"] (bg-flame-tint/bg-cobalt-tint) since no
+    # "danger"/"warning" entry exists in BADGE_VARIANT_CLASSES (see partials/logs_grid.html).
+    assert "bg-sage-tint" in body
+    assert "bg-flame-tint" in body
+    assert "bg-cobalt-tint" in body
 
 
 # --- Grid redesign (#111): status/date filters, column sort, expanded-details column ---

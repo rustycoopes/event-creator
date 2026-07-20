@@ -5,7 +5,13 @@
   change could submit stale filter values from a form that never re-rendered. Included by
   logs.html for a normal full-page load, and returned standalone by app.pages.logs for HTMX
   requests.
+
+  event-creator#30: filter fields rebuilt on organizeme_chrome's shared input/select primitives
+  (DaisyUI's select-bordered/input-bordered classes had zero CSS behind them, same root cause as
+  event-creator#26/dashboard_body.html).
 #}
+{% from "components/input.html" import input %}
+{% from "components/select.html" import select %}
 <form
   id="run-filters"
   hx-get="/logs"
@@ -19,31 +25,17 @@
   <input type="hidden" name="sort_by" value="{{ filters.sort_by }}" />
   <input type="hidden" name="sort_dir" value="{{ filters.sort_dir }}" />
 
-  <div class="form-control">
-    <label class="label label-text text-xs" for="filter-status">Status</label>
-    <select id="filter-status" name="status" class="select select-bordered select-sm">
-      <option value="">All statuses</option>
-      {% for s in statuses %}
-      <option value="{{ s.value }}" {% if filters.status == s.value %}selected{% endif %}>{{ s.value }}</option>
-      {% endfor %}
-    </select>
-  </div>
+  {# Jinja expressions have no list-comprehension syntax (unlike Python) - build the
+     (value, label) pairs select() expects via a namespace accumulator instead. #}
+  {% set status_options = namespace(items=[("", "All statuses")]) %}
+  {% for s in statuses %}
+  {% set status_options.items = status_options.items + [(s.value, s.value)] %}
+  {% endfor %}
+  {{ select("status", label="Status", options=status_options.items, value=filters.status, id="filter-status") }}
 
-  <div class="form-control">
-    <label class="label label-text text-xs" for="filter-date-from">From</label>
-    <input
-      id="filter-date-from" type="date" name="date_from" value="{{ filters.date_from }}"
-      class="input input-bordered input-sm"
-    />
-  </div>
+  {{ input("date_from", label="From", type="date", value=filters.date_from, id="filter-date-from") }}
 
-  <div class="form-control">
-    <label class="label label-text text-xs" for="filter-date-to">To</label>
-    <input
-      id="filter-date-to" type="date" name="date_to" value="{{ filters.date_to }}"
-      class="input input-bordered input-sm"
-    />
-  </div>
+  {{ input("date_to", label="To", type="date", value=filters.date_to, id="filter-date-to") }}
 </form>
 
 <div id="logs-grid-panel" class="mt-2">

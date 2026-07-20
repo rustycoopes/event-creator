@@ -3,35 +3,42 @@
   inside partials/logs_body.html, which is the actual HTMX swap unit - pagination links here
   target #logs-body (not just this fragment's own #logs-grid-panel wrapper) so the filter form's
   hidden sort fields re-render too and stay in sync with the page that was just navigated to.
+
+  event-creator#30: rebuilt on organizeme_chrome's TABLE_* class constants (DaisyUI's table/
+  table-sm/badge/link/btn classes had zero CSS behind them, same root cause as event-creator#26's
+  events_panel.html). Rows add their own hover/focus background (TABLE_BODY_ROW_CLASSES has no
+  interactive-state styling of its own since plain data tables don't need it) so a clickable row
+  reads as clickable.
 #}
+{% from "components/button.html" import button %}
 {% if total %}
-<p class="text-sm opacity-70">{{ total }} total processing run{{ "s" if total != 1 else "" }}</p>
+<p class="font-body text-sm text-ink-2 dark:text-paper-2">{{ total }} total processing run{{ "s" if total != 1 else "" }}</p>
 {% endif %}
 
 {% if runs %}
 <div class="overflow-x-auto mt-2">
-  <table class="table table-sm" id="logs-grid">
+  <table class="{{ TABLE_CLASSES }}" id="logs-grid">
     <thead>
-      <tr>
+      <tr class="{{ TABLE_HEAD_ROW_CLASSES }}">
         {# aria-sort on the active column tells screen readers the grid's current sort state,
            matching the visual ▲/▼ indicator (WAI-ARIA sortable-table pattern). #}
-        <th aria-sort="{{ "ascending" if filters.sort_by == "date" and filters.sort_dir == "asc" else "descending" if filters.sort_by == "date" else "none" }}">
-          <a href="{{ sort_urls.date }}" hx-get="{{ sort_urls.date }}" hx-target="#logs-body" hx-push-url="true" class="link link-hover">
+        <th class="{{ TABLE_HEAD_CELL_CLASSES }}" aria-sort="{{ "ascending" if filters.sort_by == "date" and filters.sort_dir == "asc" else "descending" if filters.sort_by == "date" else "none" }}">
+          <a href="{{ sort_urls.date }}" hx-get="{{ sort_urls.date }}" hx-target="#logs-body" hx-push-url="true" class="font-medium text-cobalt underline-offset-2 hover:underline dark:text-cobalt">
             Date{% if filters.sort_by == "date" %} {{ "▲" if filters.sort_dir == "asc" else "▼" }}{% endif %}
           </a>
         </th>
-        <th aria-sort="{{ "ascending" if filters.sort_by == "filename" and filters.sort_dir == "asc" else "descending" if filters.sort_by == "filename" else "none" }}">
-          <a href="{{ sort_urls.filename }}" hx-get="{{ sort_urls.filename }}" hx-target="#logs-body" hx-push-url="true" class="link link-hover">
+        <th class="{{ TABLE_HEAD_CELL_CLASSES }}" aria-sort="{{ "ascending" if filters.sort_by == "filename" and filters.sort_dir == "asc" else "descending" if filters.sort_by == "filename" else "none" }}">
+          <a href="{{ sort_urls.filename }}" hx-get="{{ sort_urls.filename }}" hx-target="#logs-body" hx-push-url="true" class="font-medium text-cobalt underline-offset-2 hover:underline dark:text-cobalt">
             Filename{% if filters.sort_by == "filename" %} {{ "▲" if filters.sort_dir == "asc" else "▼" }}{% endif %}
           </a>
         </th>
-        <th aria-sort="{{ "ascending" if filters.sort_by == "status" and filters.sort_dir == "asc" else "descending" if filters.sort_by == "status" else "none" }}">
-          <a href="{{ sort_urls.status }}" hx-get="{{ sort_urls.status }}" hx-target="#logs-body" hx-push-url="true" class="link link-hover">
+        <th class="{{ TABLE_HEAD_CELL_CLASSES }}" aria-sort="{{ "ascending" if filters.sort_by == "status" and filters.sort_dir == "asc" else "descending" if filters.sort_by == "status" else "none" }}">
+          <a href="{{ sort_urls.status }}" hx-get="{{ sort_urls.status }}" hx-target="#logs-body" hx-push-url="true" class="font-medium text-cobalt underline-offset-2 hover:underline dark:text-cobalt">
             Status{% if filters.sort_by == "status" %} {{ "▲" if filters.sort_dir == "asc" else "▼" }}{% endif %}
           </a>
         </th>
-        <th>Events</th>
-        <th>Details</th>
+        <th class="{{ TABLE_HEAD_CELL_CLASSES }}">Events</th>
+        <th class="{{ TABLE_HEAD_CELL_CLASSES }}">Details</th>
       </tr>
     </thead>
     <tbody>
@@ -44,26 +51,31 @@
         otherwise invisible to keyboard/screen-reader users.
       #}
       <tr
-        class="hover cursor-pointer"
+        class="{{ TABLE_BODY_ROW_CLASSES }} cursor-pointer transition-colors hover:bg-mist focus:bg-mist dark:hover:bg-ink-2/60 dark:focus:bg-ink-2/60"
         tabindex="0"
         role="link"
         aria-label="View run details for {{ run.filename }}"
         onclick="window.location='/processing-runs/{{ run.id }}'"
         onkeydown="if (event.key === 'Enter') window.location='/processing-runs/{{ run.id }}'"
       >
-        <td>
-          <a href="/processing-runs/{{ run.id }}" class="link link-primary" onclick="event.stopPropagation()">
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}">
+          <a href="/processing-runs/{{ run.id }}" class="font-medium text-cobalt underline-offset-2 hover:underline dark:text-cobalt" onclick="event.stopPropagation()">
             {{ run.created_at }}
           </a>
         </td>
-        <td>{{ run.filename }}</td>
-        <td>
-          <span class="badge {% if run.status == 'success' %}badge-success{% elif run.status == 'failed' %}badge-error{% elif run.status == 'in_progress' %}badge-warning{% else %}badge-info{% endif %}">
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}">{{ run.filename }}</td>
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}">
+          {#
+            No BADGE_VARIANT_CLASSES entry is named "danger"/"warning" - failed/in_progress
+            borrow the "primary" (flame) and "secondary" (cobalt) entries verbatim rather than
+            retyping their literal classes, so this stays in sync if classes.py's tints change.
+          #}
+          <span class="inline-flex items-center rounded-full px-2 py-0.5 font-body text-xs font-medium {% if run.status == 'success' %}{{ BADGE_VARIANT_CLASSES['success'] }}{% elif run.status == 'failed' %}{{ BADGE_VARIANT_CLASSES['primary'] }}{% elif run.status == 'in_progress' %}{{ BADGE_VARIANT_CLASSES['secondary'] }}{% else %}{{ BADGE_VARIANT_CLASSES['neutral'] }}{% endif %}">
             {{ run.status }}
           </span>
         </td>
-        <td>{{ run.events_extracted_count }}</td>
-        <td class="max-w-xs truncate" title="{{ run.detail_summary }}">{{ run.detail_summary }}</td>
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}">{{ run.events_extracted_count }}</td>
+        <td class="{{ TABLE_BODY_CELL_CLASSES }} max-w-xs truncate" title="{{ run.detail_summary }}">{{ run.detail_summary }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -73,17 +85,17 @@
 {% if total_pages > 1 %}
 <div class="flex justify-center items-center gap-2 mt-4">
   {% if first_url %}
-  <a href="{{ first_url }}" hx-get="{{ first_url }}" hx-target="#logs-body" hx-push-url="true" class="btn btn-sm">First</a>
+  {{ button("First", href=first_url, variant="ghost", attrs='hx-get="' ~ first_url ~ '" hx-target="#logs-body" hx-push-url="true"') }}
   {% endif %}
   {% if prev_url %}
-  <a href="{{ prev_url }}" hx-get="{{ prev_url }}" hx-target="#logs-body" hx-push-url="true" class="btn btn-sm">Previous</a>
+  {{ button("Previous", href=prev_url, variant="ghost", attrs='hx-get="' ~ prev_url ~ '" hx-target="#logs-body" hx-push-url="true"') }}
   {% endif %}
-  <span class="btn btn-sm btn-ghost no-animation">Page {{ page }} of {{ total_pages }}</span>
+  <span class="font-body text-sm text-ink-2 dark:text-paper-2">Page {{ page }} of {{ total_pages }}</span>
   {% if next_url %}
-  <a href="{{ next_url }}" hx-get="{{ next_url }}" hx-target="#logs-body" hx-push-url="true" class="btn btn-sm">Next</a>
+  {{ button("Next", href=next_url, variant="ghost", attrs='hx-get="' ~ next_url ~ '" hx-target="#logs-body" hx-push-url="true"') }}
   {% endif %}
   {% if last_url %}
-  <a href="{{ last_url }}" hx-get="{{ last_url }}" hx-target="#logs-body" hx-push-url="true" class="btn btn-sm">Last</a>
+  {{ button("Last", href=last_url, variant="ghost", attrs='hx-get="' ~ last_url ~ '" hx-target="#logs-body" hx-push-url="true"') }}
   {% endif %}
 </div>
 {% endif %}
