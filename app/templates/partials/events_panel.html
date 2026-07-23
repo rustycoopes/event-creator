@@ -13,6 +13,7 @@
 #}
 {% from "components/button.html" import button %}
 {% from "components/alert.html" import alert %}
+{% from "components/toggle.html" import toggle %}
 {% if total %}
 <p id="events-total-count" class="text-sm opacity-70" data-total="{{ total }}">{{ total }} event{{ "s" if total != 1 else "" }} total</p>
 {% endif %}
@@ -122,13 +123,13 @@
           {% endif %}
         </td>
         <td class="{{ TABLE_BODY_CELL_CLASSES }}">
-          <input
-            type="checkbox"
-            class="h-4 w-4 accent-flame {{ FOCUS_RING }}"
-            aria-label="Reviewed"
-            {% if event.reviewed %}checked{% endif %}
-            @change="toggleReviewed('{{ event.id }}', $event.target.checked, $event.target)"
-          />
+          {# event.id is a server-generated UUID (see module docstring) - safe to interpolate
+             directly into this single-quoted Alpine expression. #}
+          {{ toggle(
+            "reviewed-" ~ event.id, checked=event.reviewed,
+            on_change="toggleReviewed('" ~ event.id ~ "', $event.target.checked, $event.target)",
+            attrs='aria-label="Reviewed"'
+          ) }}
         </td>
         <td class="{{ TABLE_BODY_CELL_CLASSES }}">
           {# button()'s attrs is rendered unescaped (| safe) - only safe to interpolate event.id
