@@ -12,6 +12,7 @@
 {# event-creator#30: rebuilt on organizeme_chrome's card_shell primitive (DaisyUI's card/steps
    classes had zero CSS behind them, same root cause as event-creator#26). #}
 {% from "components/card_shell.html" import card_shell %}
+{% from "components/page_header.html" import page_header %}
 
 {# Getting Started onboarding checklist. Shown above the events table until all three onboarding
    steps are done, then hidden entirely. Steps and their done-state come from the server-rendered
@@ -43,7 +44,7 @@
 
 {% call card_shell() %}
 <div class="flex items-center justify-between flex-wrap gap-2">
-  <h1 class="font-display text-lg font-semibold text-ink dark:text-paper">Dashboard</h1>
+  {{ page_header("Dashboard") }}
   {% include "partials/import_pending_button.html" %}
 </div>
 

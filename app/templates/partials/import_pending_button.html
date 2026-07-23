@@ -41,7 +41,7 @@
     },
   }'
 >
-  {% call button(id="import-pending-files-btn", variant="ghost", x_bind_disabled="importing || !driveConnected", attrs='@click="importPending()"') %}
+  {% call button(id="import-pending-files-btn", variant="secondary", x_bind_disabled="importing || !driveConnected", attrs='@click="importPending()"') %}
     <span x-show="!importing">Import pending files</span>
     <span x-show="importing" x-cloak>Importing…</span>
   {% endcall %}

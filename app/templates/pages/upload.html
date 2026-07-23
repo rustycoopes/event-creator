@@ -82,7 +82,7 @@
       {# Always enabled; falls back to ephemeral storage if not connected (issue #79). #}
       <div
         id="upload-dropzone"
-        class="mt-4 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-ink-2/30 p-8 text-center transition-colors dark:border-paper-2/30"
+        class="mt-4 flex flex-col items-center justify-center gap-3 rounded-lg border-2 border-dashed border-ink-2/30 p-8 text-center transition-colors dark:border-paper-2/30 {{ INPUT_DEFAULT_FILL }}"
         :class="{ 'border-flame bg-flame-tint dark:bg-flame/10': dragover }"
         @dragover.prevent="dragover = true"
         @dragleave.prevent="dragover = false"
