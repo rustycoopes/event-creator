@@ -5,6 +5,9 @@
   is single-quoted (the register.html quote-truncation bug, guarded by the ported regression
   tests). notifications_data seeds the current toggle state + gating fields from the server.
 #}
+{% from "components/alert.html" import alert %}
+{% from "components/toggle.html" import toggle %}
+{% from "components/button.html" import button %}
 <div
   id="notifications-tab-panel"
   x-data='{
@@ -39,65 +42,45 @@
     },
   }'
 >
-  <div role="alert" class="alert alert-success mt-2" x-show="success" x-cloak>
-    <span>Notification preferences saved.</span>
-  </div>
-  <div role="alert" class="alert alert-error mt-2" x-show="error" x-cloak>
-    <span x-text="error"></span>
-  </div>
+  {% call alert(variant="success", x_show="success", class_="mt-2") %}Notification preferences saved.{% endcall %}
+  {{ alert(variant="danger", x_show="error", x_text="error", class_="mt-2") }}
 
-  <form class="flex flex-col gap-4" @submit.prevent="save">
-    <label class="form-control w-full">
-      <div class="label">
-        <span class="label-text">Email</span>
-        <span class="label-text-alt">
-          {% if notifications_data.email %}{{ notifications_data.email }}{% else %}Not set{% endif %}
-          — <a href="/profile" class="link">edit in Profile</a>
-        </span>
-      </div>
-    </label>
-    <label class="label cursor-pointer justify-start gap-3">
-      <input
-        type="checkbox"
-        id="notification_email"
-        x-model="notification_email"
-        {% if not notifications_data.email %}disabled{% endif %}
-        class="toggle toggle-primary"
-      />
-      <span class="label-text">Email notifications</span>
-    </label>
+  <form class="flex flex-col gap-4 mt-4" @submit.prevent="save">
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <span class="font-body text-sm text-ink-2 dark:text-paper-2">
+        {% if notifications_data.email %}{{ notifications_data.email }}{% else %}Not set{% endif %}
+        — <a href="/profile" class="font-medium text-cobalt underline-offset-2 hover:underline dark:text-cobalt">edit in Profile</a>
+      </span>
+    </div>
+    {{ toggle(
+      "notification_email", label="Email notifications",
+      x_model="notification_email", id="notification_email",
+      disabled=(not notifications_data.email)
+    ) }}
     {% if not notifications_data.email %}
-    <p class="text-sm opacity-70 -mt-2">Set your email in Profile to enable.</p>
+    <p class="font-body text-sm text-ink-2 dark:text-paper-2 -mt-2">Set your email in Profile to enable.</p>
     {% endif %}
 
-    <div class="divider my-0"></div>
+    <div class="border-t border-ink-2/10 dark:border-paper-2/10"></div>
 
-    <label class="form-control w-full">
-      <div class="label">
-        <span class="label-text">Phone number</span>
-        <span class="label-text-alt">
-          {% if notifications_data.phone_number %}{{ notifications_data.phone_number }}{% else %}Not set{% endif %}
-          — <a href="/profile" class="link">edit in Profile</a>
-        </span>
-      </div>
-    </label>
-    <label class="label cursor-pointer justify-start gap-3">
-      <input
-        type="checkbox"
-        id="notification_sms"
-        x-model="notification_sms"
-        {% if not notifications_data.phone_number %}disabled{% endif %}
-        class="toggle toggle-primary"
-      />
-      <span class="label-text">SMS notifications</span>
-    </label>
+    <div class="flex items-center justify-between gap-2 flex-wrap">
+      <span class="font-body text-sm text-ink-2 dark:text-paper-2">
+        {% if notifications_data.phone_number %}{{ notifications_data.phone_number }}{% else %}Not set{% endif %}
+        — <a href="/profile" class="font-medium text-cobalt underline-offset-2 hover:underline dark:text-cobalt">edit in Profile</a>
+      </span>
+    </div>
+    {{ toggle(
+      "notification_sms", label="SMS notifications",
+      x_model="notification_sms", id="notification_sms",
+      disabled=(not notifications_data.phone_number)
+    ) }}
     {% if not notifications_data.phone_number %}
-    <p class="text-sm opacity-70 -mt-2">Set your phone number in Profile to enable.</p>
+    <p class="font-body text-sm text-ink-2 dark:text-paper-2 -mt-2">Set your phone number in Profile to enable.</p>
     {% endif %}
 
-    <button type="submit" class="btn btn-primary mt-2" :disabled="saving">
+    {% call button(type="submit", variant="primary", class_="mt-2", x_bind_disabled="saving") %}
       <span x-show="!saving">Save changes</span>
       <span x-show="saving" x-cloak>Saving...</span>
-    </button>
+    {% endcall %}
   </form>
 </div>

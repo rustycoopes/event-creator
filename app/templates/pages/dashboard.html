@@ -9,6 +9,8 @@
 {% endblock %}
 
 {% block page %}
+{% from "components/page_header.html" import page_header %}
+{% from "components/card_shell.html" import card_shell %}
 {# Getting Started onboarding checklist. Shown above the events table until all three onboarding
    steps are done, then hidden entirely. Steps and their done-state come from the server-rendered
    onboarding_steps view-model (app/core/onboarding.py) - no live update needed; the state simply
@@ -35,16 +37,14 @@
 </div>
 {% endif %}
 
-<div class="card bg-base-100 shadow-xl">
-  <div class="card-body">
-    <div class="flex items-center justify-between flex-wrap gap-2">
-      <h1 class="card-title">Dashboard</h1>
-      {% include "partials/import_pending_button.html" %}
-    </div>
-
-    <div id="dashboard-body">
-      {% include "partials/dashboard_body.html" %}
-    </div>
-  </div>
+{% call card_shell() %}
+<div class="flex items-center justify-between flex-wrap gap-2">
+  {{ page_header("Dashboard") }}
+  {% include "partials/import_pending_button.html" %}
 </div>
+
+<div id="dashboard-body" class="mt-4">
+  {% include "partials/dashboard_body.html" %}
+</div>
+{% endcall %}
 {% endblock %}

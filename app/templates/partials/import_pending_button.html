@@ -4,6 +4,8 @@
   the including template's context, same flag app.pages.dashboard computes. Single-quoted x-data
   so the double-quoted JS strings inside don't terminate the attribute.
 #}
+{% from "components/button.html" import button %}
+{% from "components/alert.html" import alert %}
 <div
   x-data='{
     importing: false,
@@ -36,17 +38,9 @@
     },
   }'
 >
-  <button
-    id="import-pending-files-btn"
-    type="button"
-    class="btn btn-outline btn-sm"
-    :disabled="importing || !driveConnected"
-    @click="importPending()"
-  >
+  {% call button(id="import-pending-files-btn", variant="secondary", x_bind_disabled="importing || !driveConnected", attrs='@click="importPending()"') %}
     <span x-show="!importing">Import pending files</span>
     <span x-show="importing" x-cloak>Importing…</span>
-  </button>
-  <div role="alert" class="alert alert-error mt-2" x-show="error" x-cloak>
-    <span x-text="error"></span>
-  </div>
+  {% endcall %}
+  {{ alert(variant="danger", x_show="error", x_text="error", class_="mt-2") }}
 </div>

@@ -14,7 +14,9 @@
 
 {% block page %}
 {% from "components/button.html" import button %}
+{% from "components/card_shell.html" import card_shell %}
 <div class="mx-auto max-w-2xl">
+{% call card_shell() %}
   <h1 class="font-display text-2xl font-bold text-ink dark:text-paper">Processing</h1>
 
   {% if run_id %}
@@ -58,5 +60,6 @@
     {{ button("Upload a file", href="/upload") }}
   </div>
   {% endif %}
+{% endcall %}
 </div>
 {% endblock %}
