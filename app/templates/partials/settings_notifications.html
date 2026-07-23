@@ -42,7 +42,7 @@
     },
   }'
 >
-  {% call alert(variant="success", x_show="success", class_="mt-2") %}Notification preferences saved.{% endcall %}
+  {{ alert(variant="success", x_show="success", x_text="'Notification preferences saved.'", class_="mt-2") }}
   {{ alert(variant="danger", x_show="error", x_text="error", class_="mt-2") }}
 
   <form class="flex flex-col gap-4 mt-4" @submit.prevent="save">
