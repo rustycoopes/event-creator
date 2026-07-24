@@ -19,20 +19,20 @@
       type="text"
       name="search"
       placeholder="Filter logs..."
-      class="input input-bordered input-sm flex-1"
+      class="flex-1 rounded-md border {{ INPUT_DEFAULT_FILL }} {{ INPUT_DEFAULT_BORDER }} px-3 py-1.5 font-body text-sm text-ink dark:text-paper placeholder:text-ink-2/60 dark:placeholder:text-paper-2/60 {{ FOCUS_RING }}"
       value="{{ search or '' }}"
     />
   </form>
 
   {# Log entries #}
   {% if logs.log_lines %}
-  <div class="space-y-1 rounded bg-base-200 p-2 font-mono text-xs">
+  <div class="space-y-1 rounded-lg bg-mist dark:bg-ink-2 p-3 font-mono text-xs text-ink dark:text-paper">
     {% for line in logs.log_lines %}
-    <div class="break-words opacity-90">{{ line }}</div>
+    <div class="break-words">{{ line }}</div>
     {% endfor %}
   </div>
   {% else %}
-  <div class="rounded bg-base-100 p-2 text-sm opacity-70">
+  <div class="rounded-lg bg-paper-2 dark:bg-ink-2 p-3 text-sm text-ink-2 dark:text-paper-2">
     {% if search %}No matching log lines.{% else %}No log lines for this step.{% endif %}
   </div>
   {% endif %}
@@ -40,18 +40,18 @@
   {# Pagination #}
   {% if logs.total > logs.page_size %}
   <div class="flex items-center justify-between gap-2">
-    <span class="text-xs opacity-70">{{ (logs.page - 1) * logs.page_size + 1 }}–{{ ((logs.page - 1) * logs.page_size + logs.log_lines|length) }} of {{ logs.total }}</span>
+    <span class="text-xs text-ink-2 dark:text-paper-2">{{ (logs.page - 1) * logs.page_size + 1 }}–{{ ((logs.page - 1) * logs.page_size + logs.log_lines|length) }} of {{ logs.total }}</span>
     <div class="flex gap-1">
       {% if logs.page > 1 %}
       <a
-        class="btn btn-ghost btn-xs"
+        class="rounded-full px-2.5 py-1 font-body text-xs font-medium text-ink-2 hover:bg-mist hover:text-ink dark:text-paper-2 dark:hover:bg-ink-2 dark:hover:text-paper {{ FOCUS_RING }}"
         hx-get="/api/html/processing-runs/{{ run_id }}/logs?step_number={{ logs.step_number }}&page={{ logs.page - 1 }}&search={{ search or '' }}"
         hx-target="closest div[id^='logs-']"
       >Prev</a>
       {% endif %}
       {% if (logs.page * logs.page_size) < logs.total %}
       <a
-        class="btn btn-ghost btn-xs"
+        class="rounded-full px-2.5 py-1 font-body text-xs font-medium text-ink-2 hover:bg-mist hover:text-ink dark:text-paper-2 dark:hover:bg-ink-2 dark:hover:text-paper {{ FOCUS_RING }}"
         hx-get="/api/html/processing-runs/{{ run_id }}/logs?step_number={{ logs.step_number }}&page={{ logs.page + 1 }}&search={{ search or '' }}"
         hx-target="closest div[id^='logs-']"
       >Next</a>

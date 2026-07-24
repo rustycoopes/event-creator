@@ -54,7 +54,7 @@
   </div>
   {% else %}
   {# No runs yet: steer the user to Upload. #}
-  <div class="mt-6 flex flex-col items-center gap-3 rounded-lg border border-dashed border-ink-2/30 p-8 text-center dark:border-paper-2/30">
+  <div class="mt-6 flex flex-col items-center gap-3 rounded-2xl border border-dashed border-ink-2/30 p-8 text-center dark:border-paper-2/30">
     <p class="font-body font-medium text-ink dark:text-paper">No processing runs yet.</p>
     <p class="font-body text-sm text-ink-2 dark:text-paper-2">Upload a conversation and its progress will show up here.</p>
     {{ button("Upload a file", href="/upload") }}
