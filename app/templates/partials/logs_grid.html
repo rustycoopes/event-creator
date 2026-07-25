@@ -65,12 +65,7 @@
         </td>
         <td class="{{ TABLE_BODY_CELL_CLASSES }}">{{ run.filename }}</td>
         <td class="{{ TABLE_BODY_CELL_CLASSES }}">
-          {#
-            No BADGE_VARIANT_CLASSES entry is named "danger"/"warning" - failed/in_progress
-            borrow the "primary" (flame) and "secondary" (cobalt) entries verbatim rather than
-            retyping their literal classes, so this stays in sync if classes.py's tints change.
-          #}
-          <span class="inline-flex items-center rounded-full px-2 py-0.5 font-body text-xs font-medium {% if run.status == 'success' %}{{ BADGE_VARIANT_CLASSES['success'] }}{% elif run.status == 'failed' %}{{ BADGE_VARIANT_CLASSES['primary'] }}{% elif run.status == 'in_progress' %}{{ BADGE_VARIANT_CLASSES['secondary'] }}{% else %}{{ BADGE_VARIANT_CLASSES['neutral'] }}{% endif %}">
+          <span class="inline-flex items-center rounded-full px-2 py-0.5 font-body text-xs font-medium {% if run.status == 'success' %}{{ BADGE_VARIANT_CLASSES['success'] }}{% elif run.status == 'failed' %}{{ BADGE_VARIANT_CLASSES['danger'] }}{% elif run.status == 'in_progress' %}{{ BADGE_VARIANT_CLASSES['info'] }}{% else %}{{ BADGE_VARIANT_CLASSES['neutral'] }}{% endif %}">
             {{ run.status }}
           </span>
         </td>

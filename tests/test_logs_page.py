@@ -306,9 +306,9 @@ async def test_logs_shows_run_status_badge_with_correct_color(
 
     body = response.text
     # event-creator#30: badges no longer use DaisyUI's badge-success/-error/-warning (dead
-    # classes, no CSS behind them) - success reuses BADGE_VARIANT_CLASSES["success"] (bg-sage-tint),
-    # failed/in_progress reuse ["primary"]/["secondary"] (bg-flame-tint/bg-cobalt-tint) since no
-    # "danger"/"warning" entry exists in BADGE_VARIANT_CLASSES (see partials/logs_grid.html).
+    # classes, no CSS behind them) - success/failed/in_progress map to BADGE_VARIANT_CLASSES'
+    # own success/danger/info entries (bg-sage-tint/bg-flame-tint/bg-cobalt-tint), added to chrome
+    # in the FamilyWall redesign (see partials/logs_grid.html).
     assert "bg-sage-tint" in body
     assert "bg-flame-tint" in body
     assert "bg-cobalt-tint" in body
