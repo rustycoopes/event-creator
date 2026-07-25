@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
+from organizeme_chrome.static_paths import static_mount_path
 
 # Imported first, deliberately - configures organizeme_chrome's registry source (see
 # app/core/registry.py's module docstring) before any router module below can call
@@ -56,7 +57,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(title="Event Creator", lifespan=lifespan)
+# static-asset-routing (organize-me#254/#261): the shared domain's Load Balancer routes each app's
+# static assets by service-name prefix, so this app must serve its own compiled CSS/fonts there too.
+# The old bare "/static" mount stays alive alongside it for one release - see
+# docs/adr/static-asset-routing-mount-transition.md (organize-me) - so a browser tab that rendered
+# HTML from the previous revision doesn't 404 on its next asset fetch.
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+app.mount(
+    static_mount_path("event-creator"),
+    StaticFiles(directory=BASE_DIR / "static"),
+    name="static-prefixed",
+)
 
 app.include_router(dashboard_router)
 app.include_router(prompt_router)
