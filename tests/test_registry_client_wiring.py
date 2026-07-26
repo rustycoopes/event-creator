@@ -89,6 +89,59 @@ async def test_refresh_task_keeps_last_known_good_on_a_failed_fetch(
         await stop_registry_refresh_task(task, client)
 
 
+async def test_refresh_loop_selects_the_local_dev_token_provider_when_bypass_is_true(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    async def fake_fetch_registry_once(
+        client: object, host_url: str, token_provider: object
+    ) -> list[AppEntry]:
+        captured["token_provider"] = token_provider
+        return [SELF_APP_ENTRY]
+
+    monkeypatch.setattr(registry_module, "fetch_registry_once", fake_fetch_registry_once)
+
+    source = configure_client_registry_source()
+    task, client = start_registry_refresh_task(source, _settings(registry_local_dev_bypass=True))
+    try:
+        await asyncio.sleep(0.05)
+        # The default path's token provider would hang/fail trying to reach the (unreachable in
+        # tests) GCP metadata server - proving the captured provider is the local-dev one this
+        # cheaply, by calling it, is more direct than asserting on closure internals.
+        assert await captured["token_provider"]() == "local-dev-placeholder-token"  # type: ignore[operator]
+    finally:
+        await stop_registry_refresh_task(task, client)
+
+
+async def test_refresh_loop_selects_the_default_token_provider_when_bypass_is_false(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    async def fake_fetch_registry_once(
+        client: object, host_url: str, token_provider: object
+    ) -> list[AppEntry]:
+        captured["token_provider"] = token_provider
+        return [SELF_APP_ENTRY]
+
+    async def fake_default_provider() -> str:
+        return "default-oidc-token"
+
+    monkeypatch.setattr(registry_module, "fetch_registry_once", fake_fetch_registry_once)
+    monkeypatch.setattr(
+        registry_module, "build_default_token_provider", lambda audience: fake_default_provider
+    )
+
+    source = configure_client_registry_source()
+    task, client = start_registry_refresh_task(source, _settings(registry_local_dev_bypass=False))
+    try:
+        await asyncio.sleep(0.05)
+        assert await captured["token_provider"]() == "default-oidc-token"  # type: ignore[operator]
+    finally:
+        await stop_registry_refresh_task(task, client)
+
+
 async def test_stop_registry_refresh_task_cancels_the_loop_cleanly(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

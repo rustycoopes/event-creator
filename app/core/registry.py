@@ -29,7 +29,9 @@ import httpx
 from organizeme_chrome.registry import AppEntry, AppNavItem, SettingsTab
 from organizeme_chrome.registry_client import (
     FetchedRegistrySource,
+    TokenProvider,
     build_default_token_provider,
+    build_local_dev_token_provider,
     fetch_registry_once,
 )
 
@@ -71,7 +73,17 @@ async def _refresh_loop(
     client: httpx.AsyncClient,
     settings: Settings,
 ) -> None:
-    token_provider = build_default_token_provider(settings.registry_host_url)
+    token_provider: TokenProvider
+    if settings.registry_local_dev_bypass:
+        # local-dev-environment Slice 4: no metadata-server round trip - the Host's registry-read
+        # bypass (organize-me#266) accepts any request with no Authorization header, so this
+        # provider only needs to keep fetch_registry_once's call shape uniform between the real
+        # and local-dev paths. Only ever selected when registry_local_dev_bypass is true, which the
+        # local-dev launcher sets as a subprocess environment variable - never by hand in
+        # .env.local - per docs/adr/local-dev-environment-registry-sync-auth-bypass.md (organize-me).
+        token_provider = build_local_dev_token_provider()
+    else:
+        token_provider = build_default_token_provider(settings.registry_host_url)
     fresh_since: str | None = None
     while True:
         try:
