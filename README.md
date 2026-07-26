@@ -38,6 +38,11 @@ uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```
 
+To run alongside the Host and other hosted apps behind a shared local proxy (real registry-synced
+cross-app nav, one login for all apps, no Docker), use `organize-me`'s launcher instead — see its
+["Local development"](https://github.com/rustycoopes/organize-me/blob/main/docs/local-development.md)
+doc.
+
 ## Testing
 
 ```bash

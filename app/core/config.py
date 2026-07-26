@@ -85,6 +85,12 @@ class Settings(BaseSettings):
     registry_host_url: str = ""
     registry_refresh_interval_seconds: float = 60
     registry_fetch_timeout_seconds: float = 5
+    # local-dev-environment Slice 4 (organize-me#265-#266): set by organize-me's local-dev
+    # launcher (never hand-added to a developer's own .env.local) alongside registry_host_url
+    # pointing at the Host's local port. When true, the registry refresh loop skips the OIDC
+    # metadata-server round trip entirely - see app/core/registry.py's _refresh_loop. Defaults
+    # False so QA/prod behavior is unchanged.
+    registry_local_dev_bypass: bool = False
 
 
 @lru_cache
