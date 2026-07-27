@@ -20,6 +20,10 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Protocol
 
+from app.core.config import get_settings
+from app.services.notifications.email import FakeEmailSender
+from app.services.notifications.sms import FakeSmsSender
+
 logger = logging.getLogger(__name__)
 
 
@@ -97,7 +101,16 @@ class FakeNotificationSender:
 
 
 def get_pipeline_notifier() -> NotificationSender:
-    """Return the production notifier. Overridable via ``dependency_overrides`` in tests."""
+    """Return the production notifier. Overridable via ``dependency_overrides`` in tests.
+
+    Under ``E2E_TEST_MODE`` or ``MOCK_INTEGRATIONS`` this still returns a ``RealNotificationSender``
+    (so per-user email/SMS preferences and templating are exercised as normal) but with
+    ``FakeEmailSender``/``FakeSmsSender`` injected in place of the real Resend/Twilio clients, so
+    the Playwright suite or a developer running locally never places a real send.
+    """
     from app.services.notifications.sender import RealNotificationSender
 
+    settings = get_settings()
+    if settings.e2e_test_mode or settings.mock_integrations:
+        return RealNotificationSender(email_sender=FakeEmailSender(), sms_sender=FakeSmsSender())
     return RealNotificationSender()

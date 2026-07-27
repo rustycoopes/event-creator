@@ -2,9 +2,10 @@
 
 Central place that turns a user's saved ``storage_configs`` row into a concrete provider:
 
-- Under ``E2E_TEST_MODE`` (QA only) it returns the in-memory ``FakeStorageProvider`` so the
-  Playwright suite (#53) can drive upload -> pipeline -> events without a real Drive connection or
-  live OAuth (per #52's resolved testability decision).
+- Under ``E2E_TEST_MODE`` (QA only) or ``MOCK_INTEGRATIONS`` (local dev) it returns the in-memory
+  ``FakeStorageProvider`` so the Playwright suite (#53) or a developer running locally can drive
+  upload -> pipeline -> events without a real Drive connection or live OAuth (per #52's resolved
+  testability decision).
 - Otherwise it decrypts the stored Google Drive OAuth tokens (via ``CredentialCipher``, #47) and
   builds a ``GoogleDriveStorageProvider`` pointed at the user's watched folder.
 - If storage config is unavailable or decryption fails (issue #79), falls back to
@@ -117,7 +118,7 @@ def build_storage_provider(
     If ``fallback_to_ephemeral`` is True and no config/cipher is available, returns an
     EphemeralStorageProvider instead of raising. Used for issue #79 graceful degradation.
     """
-    if settings.e2e_test_mode:
+    if settings.e2e_test_mode or settings.mock_integrations:
         return FakeStorageProvider()
     if config is None or cipher is None:
         if fallback_to_ephemeral:
