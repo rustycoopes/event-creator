@@ -16,6 +16,18 @@ from app.services.llm.gemini import (
     get_gemini_client,
 )
 
+def _patch_settings(
+    monkeypatch: pytest.MonkeyPatch, *, e2e_test_mode: bool = False, mock_integrations: bool = False
+) -> None:
+    import app.services.llm.gemini as gemini_module
+    from app.core.config import get_settings
+
+    patched = get_settings().model_copy(
+        update={"e2e_test_mode": e2e_test_mode, "mock_integrations": mock_integrations}
+    )
+    monkeypatch.setattr(gemini_module, "get_settings", lambda: patched)
+
+
 EXAMPLE_OUTPUT = (
     Path(__file__).resolve().parents[1] / "examples" / "example.lmmoutput.txt"
 ).read_text(encoding="utf-8")
@@ -112,11 +124,7 @@ async def test_get_gemini_client_returns_the_fake_under_e2e_test_mode(
 ) -> None:
     # Under E2E_TEST_MODE the factory returns a fake seeded with a canned, schema-valid payload so
     # the Playwright suite (#53) can run the pipeline to success without a real GEMINI_API_KEY.
-    import app.services.llm.gemini as gemini_module
-    from app.core.config import get_settings
-
-    e2e_settings = get_settings().model_copy(update={"e2e_test_mode": True})
-    monkeypatch.setattr(gemini_module, "get_settings", lambda: e2e_settings)
+    _patch_settings(monkeypatch, e2e_test_mode=True)
 
     client = get_gemini_client()
 
@@ -128,3 +136,21 @@ async def test_get_gemini_client_returns_the_fake_under_e2e_test_mode(
     events = json.loads(payload)
     assert isinstance(events, list) and events
     assert {"type", "description", "resolved_date"} <= events[0].keys()
+
+
+def test_get_gemini_client_returns_the_fake_under_mock_integrations(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # MOCK_INTEGRATIONS selects the same fake as E2E_TEST_MODE, independently of it (local dev).
+    _patch_settings(monkeypatch, mock_integrations=True)
+
+    assert isinstance(get_gemini_client(), FakeGeminiClient)
+
+
+def test_get_gemini_client_returns_the_fake_when_both_flags_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The two flags are OR-able - setting both must not be blocked.
+    _patch_settings(monkeypatch, mock_integrations=True, e2e_test_mode=True)
+
+    assert isinstance(get_gemini_client(), FakeGeminiClient)

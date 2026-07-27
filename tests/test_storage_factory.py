@@ -14,13 +14,14 @@ from app.core.security import CredentialCipher
 from app.models.storage_config import StorageConfig, StorageProviderType
 from app.services.storage.dropbox import DropboxStorageProvider
 from app.services.storage.factory import build_storage_provider
+from app.services.storage.fake import FakeStorageProvider
 from app.services.storage.google_drive import GoogleDriveStorageProvider
 from app.services.storage.s3 import S3StorageProvider
 
 _CIPHER = CredentialCipher(Fernet.generate_key())
 
 
-def _settings() -> Settings:
+def _settings(*, e2e_test_mode: bool = False, mock_integrations: bool = False) -> Settings:
     return Settings(
         database_url="sqlite+aiosqlite://",
         jwt_secret="secret",
@@ -28,7 +29,8 @@ def _settings() -> Settings:
         google_oauth_client_secret="g-secret",
         dropbox_oauth_client_id="d-id",
         dropbox_oauth_client_secret="d-secret",
-        e2e_test_mode=False,
+        e2e_test_mode=e2e_test_mode,
+        mock_integrations=mock_integrations,
     )
 
 
@@ -107,3 +109,42 @@ def test_s3_config_missing_credentials_raises() -> None:
             settings=_settings(),
             cipher=_CIPHER,
         )
+
+
+def test_e2e_test_mode_alone_resolves_to_fake_storage_provider() -> None:
+    provider = build_storage_provider(
+        config=_config(StorageProviderType.DROPBOX),
+        settings=_settings(e2e_test_mode=True),
+        cipher=_CIPHER,
+    )
+    assert isinstance(provider, FakeStorageProvider)
+
+
+def test_mock_integrations_resolves_to_fake_storage_provider() -> None:
+    """MOCK_INTEGRATIONS selects the same fake as E2E_TEST_MODE, independently of it."""
+    provider = build_storage_provider(
+        config=_config(StorageProviderType.DROPBOX),
+        settings=_settings(mock_integrations=True),
+        cipher=_CIPHER,
+    )
+    assert isinstance(provider, FakeStorageProvider)
+
+
+def test_mock_integrations_and_e2e_test_mode_together_resolves_to_fake_storage_provider() -> None:
+    """The two flags are OR-able - setting both must not be blocked."""
+    provider = build_storage_provider(
+        config=_config(StorageProviderType.DROPBOX),
+        settings=_settings(mock_integrations=True, e2e_test_mode=True),
+        cipher=_CIPHER,
+    )
+    assert isinstance(provider, FakeStorageProvider)
+
+
+def test_both_flags_unset_still_resolves_to_the_real_provider() -> None:
+    """No regression to default/QA/prod behavior when neither flag is set."""
+    provider = build_storage_provider(
+        config=_config(StorageProviderType.DROPBOX),
+        settings=_settings(),
+        cipher=_CIPHER,
+    )
+    assert isinstance(provider, DropboxStorageProvider)

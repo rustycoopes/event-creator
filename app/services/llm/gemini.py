@@ -112,10 +112,12 @@ def get_gemini_client() -> GeminiClient:
     """Return the Gemini client for a run. Overridable via ``dependency_overrides`` in tests
     (like ``get_email_sender``) so request handlers never hit the live API.
 
-    Under ``E2E_TEST_MODE`` (QA only) it returns a ``FakeGeminiClient`` with a canned payload so the
-    Playwright suite (#53) can run the full upload -> pipeline -> SSE flow to a *successful* terminal
-    state without a real ``GEMINI_API_KEY`` — mirroring how the storage provider resolves to the
-    in-memory fake in the same mode (see app.services.storage.factory)."""
-    if get_settings().e2e_test_mode:
+    Under ``E2E_TEST_MODE`` (QA only) or ``MOCK_INTEGRATIONS`` (local dev) it returns a
+    ``FakeGeminiClient`` with a canned payload so the Playwright suite (#53) or a developer running
+    locally can run the full upload -> pipeline -> SSE flow to a *successful* terminal state without
+    a real ``GEMINI_API_KEY`` — mirroring how the storage provider resolves to the in-memory fake in
+    the same modes (see app.services.storage.factory)."""
+    settings = get_settings()
+    if settings.e2e_test_mode or settings.mock_integrations:
         return FakeGeminiClient(E2E_FAKE_EXTRACTION_PAYLOAD)
     return GoogleGeminiClient()

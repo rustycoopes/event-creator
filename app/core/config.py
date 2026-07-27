@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     # (mirrors organize-me's flag). Defaults false; no route in this slice reads it yet, but the
     # ported factory function's signature depends on it existing on Settings.
     e2e_test_mode: bool = False
+    # Local-dev convenience flag (docs/adr/local-dev-environment-mock-integrations-flag.md in
+    # organize-me): selects the same fake storage/Gemini/SMS/email implementations as
+    # e2e_test_mode, without also opting into e2e_test_mode's QA-CI-only behavior (in organize-me,
+    # that flag additionally exposes a Playwright-only reset-token endpoint - event-creator has no
+    # such endpoint itself, but the two flags are kept distinct here too for the same reason).
+    # OR-able with e2e_test_mode - both may be set together.
+    mock_integrations: bool = False
     # Gemini API key used by app.services.llm.gemini.GoogleGeminiClient (ported from organize-me,
     # issue #51). Empty default (mirrors the other optional secrets above) - GoogleGeminiClient
     # raises a clear GeminiError if it's actually used while unset.

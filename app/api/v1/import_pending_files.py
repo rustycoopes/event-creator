@@ -57,10 +57,11 @@ async def get_import_storage(
 ) -> StorageProvider:
     """Resolve the storage provider for a scan.
 
-    Under ``E2E_TEST_MODE`` the fake provider is returned unconditionally, same as
-    ``get_upload_storage``. Otherwise requires a connected storage provider - a 400 if not, since
-    there's no ephemeral "watch folder" to scan (unlike an upload, which can proceed without one)."""
-    if settings.e2e_test_mode:
+    Under ``E2E_TEST_MODE`` or ``MOCK_INTEGRATIONS`` the fake provider is returned
+    unconditionally, same as ``get_upload_storage``. Otherwise requires a connected storage
+    provider - a 400 if not, since there's no ephemeral "watch folder" to scan (unlike an upload,
+    which can proceed without one)."""
+    if settings.e2e_test_mode or settings.mock_integrations:
         return build_storage_provider(config=None, settings=settings, cipher=None)
     config = await get_user_storage_config(db, user_id)
     if not config_is_connected(config):

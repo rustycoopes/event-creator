@@ -181,3 +181,25 @@ async def test_e2e_test_mode_bypasses_the_drive_gate_for_import(
 
     assert response.status_code == 400
     assert response.json()["detail"] == "no_pending_files"
+
+
+async def test_mock_integrations_bypasses_the_drive_gate_for_import(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """MOCK_INTEGRATIONS bypasses the connected-storage gate the same way E2E_TEST_MODE does."""
+    from app.core.config import Settings, get_settings
+
+    user_id = await create_host_user(db_session)
+    cookies = {"organizeme_auth": make_token.valid(sub=str(user_id))}
+    scheduler = _RecordingBatchScheduler()
+
+    def mock_integrations_settings() -> Settings:
+        return get_settings().model_copy(update={"mock_integrations": True})
+
+    app.dependency_overrides[get_settings] = mock_integrations_settings
+    _override_scheduler(scheduler)
+
+    response = await client.post("/api/v1/import-pending-files", cookies=cookies)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "no_pending_files"
