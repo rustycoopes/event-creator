@@ -27,14 +27,17 @@
   Bulk-selection state (event-creator#41 / dashboard-bulk-actions Slice 1) is added to this same
   flat x-data object rather than a nested scope - see TDD § Frontend: extending the existing
   Alpine scope. selectedIds/allVisibleIds stay action-agnostic (no "delete"-specific knowledge)
-  so a future second bulk action can read them without touching the selection mechanism itself.
+  so a second bulk action (event-creator#42 / Slice 2's bulkMarkReviewed()) can read them without
+  touching the selection mechanism itself.
   Selection resets to empty for free whenever this fragment is re-rendered (filter/sort/page
   change, a bulk action completing, or a single-row delete completing) since the HTMX swap
   replaces this whole x-data scope - no separate reset logic needed. That same swap is also why a
   partial-failure message can't just be assigned to `error` before triggering the refresh: the
   swap destroys this x-data instance (and the freshly-initialized replacement starts with
   error: "") before the user has any chance to read it. init() below recovers it from
-  sessionStorage instead, which survives the innerHTML swap.
+  sessionStorage instead, which survives the innerHTML swap. "bulkActionFlash" is shared by both
+  bulk-delete and bulk-review (whichever ran last wins, since only one bulk action can be in
+  flight at a time).
 #}
 <div
   class="overflow-x-auto mt-2"
@@ -45,11 +48,12 @@
     selectedIds: [],
     allVisibleIds: {{ events | map(attribute="id") | map("string") | list | tojson }},
     bulkDeleting: false,
+    bulkReviewing: false,
     init() {
-      const flash = sessionStorage.getItem("bulkDeleteFlash");
+      const flash = sessionStorage.getItem("bulkActionFlash");
       if (flash) {
         this.error = flash;
-        sessionStorage.removeItem("bulkDeleteFlash");
+        sessionStorage.removeItem("bulkActionFlash");
       }
     },
     openConfirm(id) {
@@ -112,7 +116,7 @@
           // destroys this x-data instance before a directly-assigned error would ever render (see
           // the module comment above). init() on the freshly-swapped-in instance picks this up.
           sessionStorage.setItem(
-            "bulkDeleteFlash",
+            "bulkActionFlash",
             result.succeeded_ids.length + " of " + total + " events deleted."
           );
         }
@@ -128,12 +132,47 @@
         this.bulkDeleting = false;
       }
     },
+    async bulkMarkReviewed() {
+      // No confirm dialog (event-creator#42 TDD): one-directional and always sets reviewed=true,
+      // so there is nothing destructive to gate behind a confirmation - matches the existing
+      // per-row Reviewed toggles own no-confirmation behavior.
+      this.bulkReviewing = true;
+      this.error = "";
+      try {
+        const response = await fetch("/api/v1/events/bulk-review", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ event_ids: this.selectedIds }),
+        });
+        if (!response.ok) throw new Error("bulk review failed");
+        const result = await response.json();
+        if (result.failed_ids.length > 0) {
+          const total = result.succeeded_ids.length + result.failed_ids.length;
+          sessionStorage.setItem(
+            "bulkActionFlash",
+            result.succeeded_ids.length + " of " + total + " events marked as reviewed."
+          );
+        }
+        htmx.ajax("GET", window.location.pathname + window.location.search, {
+          target: "#dashboard-body",
+          swap: "innerHTML",
+        });
+      } catch (e) {
+        this.error = "Could not mark the selected events as reviewed. Please try again.";
+      } finally {
+        this.bulkReviewing = false;
+      }
+    },
   }'
 >
   {{ alert(variant="danger", x_show="error", x_text="error", class_="mb-2") }}
 
   <div x-show="selectedIds.length > 0" x-cloak class="flex items-center gap-3 mb-2">
     <span class="font-body text-sm text-ink-2 dark:text-paper-2" x-text="selectedIds.length + ' selected'"></span>
+    {% call button(type="button", variant="primary", x_bind_disabled="bulkReviewing", attrs='@click="bulkMarkReviewed()"') %}
+      <span x-show="!bulkReviewing">Mark Selected as Reviewed</span>
+      <span x-show="bulkReviewing" x-cloak>Marking...</span>
+    {% endcall %}
     {{ button("Delete Selected", variant="danger-solid", attrs='@click="openBulkConfirm()"') }}
   </div>
 

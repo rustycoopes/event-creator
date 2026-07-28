@@ -144,6 +144,36 @@ test.describe('Events dashboard', () => {
     await expect(page.getByRole('checkbox', { name: 'Select all events on this page' })).not.toBeChecked();
   });
 
+  // event-creator#42 (dashboard-bulk-actions Slice 2): "Mark Selected as Reviewed" applies with
+  // no confirm dialog (unlike bulk delete), styled distinctly (primary/cobalt) from Delete
+  // Selected (danger-solid/flame).
+  test('bulk mark-reviewed applies immediately with no confirm dialog, hides marked rows, and is styled distinctly from Delete Selected', async ({
+    page,
+  }) => {
+    await registerNewUser(page, 'dashboard-bulk-review');
+    await uploadFileAndWaitForCompletion(page, 'chat.txt', 'E2E dashboard test conversation.\n');
+    await page.goto('/dashboard');
+
+    const swimRow = page.locator('#events-table tbody tr', { hasText: 'swim meet' });
+    await swimRow.getByRole('checkbox', { name: 'Select event' }).check();
+
+    const markReviewedButton = page.getByRole('button', { name: 'Mark Selected as Reviewed' });
+    const deleteSelectedButton = page.getByRole('button', { name: 'Delete Selected' });
+    await expect(markReviewedButton).toHaveClass(/bg-cobalt/);
+    await expect(deleteSelectedButton).toHaveClass(/bg-flame/);
+
+    await markReviewedButton.click();
+
+    // Applies immediately - no confirm dialog gates it, unlike bulk delete.
+    await expect(page.getByRole('dialog')).not.toBeVisible();
+    await expect(page.getByText('E2E test — swim meet.')).not.toBeVisible();
+    await expect(page.getByText('E2E test — pick up from school.')).toBeVisible();
+    await expect(page.getByText('1 event total')).toBeVisible();
+    // Selection clears for free once the table refreshes, same as bulk delete.
+    await expect(page.getByText(/^\d+ selected$/)).not.toBeVisible();
+    await expect(page.getByRole('checkbox', { name: 'Select all events on this page' })).not.toBeChecked();
+  });
+
   test('selection clears after a filter change and after a sort change', async ({ page }) => {
     await registerNewUser(page, 'dashboard-bulk-clear');
     await uploadFileAndWaitForCompletion(page, 'chat.txt', 'E2E dashboard test conversation.\n');

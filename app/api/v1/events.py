@@ -9,7 +9,8 @@ reviewed flag, both scoped to the requesting user so no one can touch (or even d
 existence of) another user's event. ``POST /api/v1/events/bulk-delete`` (event-creator#41,
 dashboard-bulk-actions Slice 1) is the same ownership-scoping guarantee applied set-wise: a
 best-effort bulk delete that reports per-id success/failure instead of 403/404ing the whole
-request.
+request. ``POST /api/v1/events/bulk-review`` (event-creator#42, dashboard-bulk-actions Slice 2)
+is the same pattern for bulk mark-as-reviewed.
 """
 
 import logging
@@ -18,7 +19,7 @@ from datetime import date as date_
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Text, cast, delete, func, or_, select
+from sqlalchemy import Text, cast, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import current_user_id
@@ -265,6 +266,44 @@ async def bulk_delete_events(
     failed_ids = [event_id for event_id in requested_ids if event_id not in succeeded_set]
     logger.info(
         "bulk delete: user=%s requested=%d (deduped=%d) succeeded=%s failed=%s",
+        user_id,
+        len(body.event_ids),
+        len(requested_ids),
+        succeeded_ids,
+        failed_ids,
+    )
+    return BulkActionResult(succeeded_ids=succeeded_ids, failed_ids=failed_ids)
+
+
+@router.post("/events/bulk-review", response_model=BulkActionResult)
+async def bulk_review_events(
+    body: BulkEventIdsRequest,
+    user_id: uuid.UUID = Depends(current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> BulkActionResult:
+    """Best-effort bulk mark-as-reviewed, scoped to the requesting user like
+    ``bulk_delete_events``.
+
+    Not scoped to ``WHERE reviewed IS FALSE``: an already-reviewed id submitted again still
+    matches and lands in ``succeeded_ids`` (a no-op at the storage level), so a selection mixing
+    reviewed and unreviewed events never produces a confusing ``failed_id`` for a row already in
+    the target state. There is no bulk-unreview counterpart - ``BulkEventIdsRequest``'s
+    ``extra="forbid"`` makes a request body carrying a ``reviewed`` field 422 rather than being
+    silently accepted, so this endpoint structurally can only ever set ``reviewed = true``.
+    """
+    requested_ids = list(dict.fromkeys(body.event_ids))
+    result = await db.execute(
+        update(Event)
+        .where(Event.id.in_(requested_ids), Event.user_id == user_id)
+        .values(reviewed=True)
+        .returning(Event.id)
+    )
+    succeeded_ids = list(result.scalars().all())
+    await db.commit()
+    succeeded_set = set(succeeded_ids)
+    failed_ids = [event_id for event_id in requested_ids if event_id not in succeeded_set]
+    logger.info(
+        "bulk review: user=%s requested=%d (deduped=%d) succeeded=%s failed=%s",
         user_id,
         len(body.event_ids),
         len(requested_ids),
