@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     # Dropbox OAuth app credentials (Slice R7). Same empty-default reasoning.
     dropbox_oauth_client_id: str = ""
     dropbox_oauth_client_secret: str = ""
+    # The Dropbox OAuth callback's absolute redirect_uri (issue #201), fixed per environment for
+    # the same reason as google_drive_redirect_uri above (issue #200) - Dropbox rejects a
+    # redirect_uri that doesn't exactly match one registered on the app with the same
+    # redirect_uri_mismatch error Google gives. Empty default; /auth fails fast if it's actually
+    # used while unset.
+    dropbox_oauth_redirect_uri: str = ""
     # Fernet key used to encrypt stored storage-provider credentials at rest (see
     # app.core.security). Empty default (mirrors organize-me's ENCRYPTION_KEY) - the storage
     # connect flows raise a clear, actionable RuntimeError if it's actually used while unset.

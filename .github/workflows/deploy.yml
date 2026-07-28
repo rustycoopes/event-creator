@@ -25,6 +25,9 @@ jobs:
       GOOGLE_DRIVE_REDIRECT_URI: https://organizeme.russcoopersoftware.com/api/v1/storage-config/google-drive/callback
       DROPBOX_OAUTH_CLIENT_ID: ${{ secrets.DROPBOX_OAUTH_CLIENT_ID }}
       DROPBOX_OAUTH_CLIENT_SECRET: ${{ secrets.DROPBOX_OAUTH_CLIENT_SECRET }}
+      # Fixed per-environment value (issue #201), not a secret - must match what's registered on
+      # the Dropbox app in the Dropbox App Console.
+      DROPBOX_OAUTH_REDIRECT_URI: https://organizeme.russcoopersoftware.com/api/v1/storage-config/dropbox/callback
       ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
       # Gemini pipeline calls moved here in R11, but this was never wired in until now (found live
       # in prod as "Gemini call failed: GEMINI_API_KEY is not set" - tests mock the Gemini client,
@@ -129,6 +132,7 @@ jobs:
           GOOGLE_DRIVE_REDIRECT_URI: "https://organizeme.russcoopersoftware.com/api/v1/storage-config/google-drive/callback"
           BASE_URL: "https://organizeme.russcoopersoftware.com"
           DROPBOX_OAUTH_CLIENT_ID: "${DROPBOX_OAUTH_CLIENT_ID}"
+          DROPBOX_OAUTH_REDIRECT_URI: "https://organizeme.russcoopersoftware.com/api/v1/storage-config/dropbox/callback"
           GEMINI_API_KEY: "${GEMINI_API_KEY}"
           RESEND_API_KEY: "${RESEND_API_KEY}"
           TWILIO_ACCOUNT_SID: "${TWILIO_ACCOUNT_SID}"

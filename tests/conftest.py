@@ -60,6 +60,12 @@ def _env(monkeypatch: pytest.MonkeyPatch) -> None:
         "GOOGLE_DRIVE_REDIRECT_URI",
         "https://organizeme.qa.russcoopersoftware.com/api/v1/storage-config/google-drive/callback",
     )
+    # Same reasoning, Dropbox side (issue #201) - see storage_dropbox.py's _dropbox_redirect_uri
+    # docstring.
+    monkeypatch.setenv(
+        "DROPBOX_OAUTH_REDIRECT_URI",
+        "https://organizeme.qa.russcoopersoftware.com/api/v1/storage-config/dropbox/callback",
+    )
 
 
 @pytest.fixture
