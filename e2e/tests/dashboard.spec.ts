@@ -82,4 +82,84 @@ test.describe('Events dashboard', () => {
     await expect(page.getByText('E2E test — pick up from school.')).toBeVisible();
     await expect(page.getByText('1 event total')).toBeVisible();
   });
+
+  // event-creator#41 (dashboard-bulk-actions Slice 1): the two-event canned fixture is enough to
+  // exercise the header checkbox's indeterminate state (one selected out of two is already "some
+  // but not all") without needing a bigger, hand-rolled fixture.
+  test('row/select-all checkboxes drive the bulk toolbar and header indeterminate state', async ({
+    page,
+  }) => {
+    await registerNewUser(page, 'dashboard-bulk-select');
+    await uploadFileAndWaitForCompletion(page, 'chat.txt', 'E2E dashboard test conversation.\n');
+    await page.goto('/dashboard');
+
+    const headerCheckbox = page.getByRole('checkbox', { name: 'Select all events on this page' });
+    const schoolRow = page.locator('#events-table tbody tr', { hasText: 'pick up from school' });
+    const swimRow = page.locator('#events-table tbody tr', { hasText: 'swim meet' });
+
+    await expect(page.getByText(/^\d+ selected$/)).not.toBeVisible();
+
+    await schoolRow.getByRole('checkbox', { name: 'Select event' }).check();
+
+    await expect(page.getByText('1 selected')).toBeVisible();
+    await expect(headerCheckbox).not.toBeChecked();
+    expect(await headerCheckbox.evaluate((el: HTMLInputElement) => el.indeterminate)).toBe(true);
+
+    await swimRow.getByRole('checkbox', { name: 'Select event' }).check();
+
+    await expect(page.getByText('2 selected')).toBeVisible();
+    await expect(headerCheckbox).toBeChecked();
+    expect(await headerCheckbox.evaluate((el: HTMLInputElement) => el.indeterminate)).toBe(false);
+
+    await headerCheckbox.uncheck();
+
+    await expect(page.getByText(/^\d+ selected$/)).not.toBeVisible();
+  });
+
+  test('bulk delete removes only the selected events behind a confirm dialog showing the count, then clears selection', async ({
+    page,
+  }) => {
+    await registerNewUser(page, 'dashboard-bulk-delete');
+    await uploadFileAndWaitForCompletion(page, 'chat.txt', 'E2E dashboard test conversation.\n');
+    await page.goto('/dashboard');
+
+    const swimRow = page.locator('#events-table tbody tr', { hasText: 'swim meet' });
+    await swimRow.getByRole('checkbox', { name: 'Select event' }).check();
+    await page.getByRole('button', { name: 'Delete Selected' }).click();
+
+    // Confirm dialog gates the delete and states the exact count - it must not happen on the
+    // first click.
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByText('Delete 1 event?')).toBeVisible();
+    await expect(page.getByText('E2E test — swim meet.')).toBeVisible();
+
+    await dialog.getByRole('button', { name: 'Delete' }).click();
+
+    await expect(page.getByText('E2E test — swim meet.')).not.toBeVisible();
+    await expect(page.getByText('E2E test — pick up from school.')).toBeVisible();
+    await expect(page.getByText('1 event total')).toBeVisible();
+    // Selection clears for free once the table refreshes (event-creator#41 TDD) - the toolbar
+    // and header checkbox both go back to their empty state.
+    await expect(page.getByText(/^\d+ selected$/)).not.toBeVisible();
+    await expect(page.getByRole('checkbox', { name: 'Select all events on this page' })).not.toBeChecked();
+  });
+
+  test('selection clears after a filter change and after a sort change', async ({ page }) => {
+    await registerNewUser(page, 'dashboard-bulk-clear');
+    await uploadFileAndWaitForCompletion(page, 'chat.txt', 'E2E dashboard test conversation.\n');
+    await page.goto('/dashboard');
+
+    const headerCheckbox = page.getByRole('checkbox', { name: 'Select all events on this page' });
+    await headerCheckbox.check();
+    await expect(page.getByText('2 selected')).toBeVisible();
+
+    await page.locator('#filter-type').selectOption('School');
+    await expect(page.getByText(/^\d+ selected$/)).not.toBeVisible();
+
+    await page.getByRole('checkbox', { name: 'Select all events on this page' }).check();
+    await expect(page.getByText('1 selected')).toBeVisible();
+
+    await page.getByRole('link', { name: /^Sort:/ }).click();
+    await expect(page.getByText(/^\d+ selected$/)).not.toBeVisible();
+  });
 });

@@ -22,7 +22,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.events import (
-    PAGE_SIZE,
     SortOrder,
     list_user_event_types,
     list_user_events,
@@ -36,6 +35,7 @@ from app.core.nav import sidebar_nav_context
 from app.core.onboarding import build_onboarding_steps, onboarding_complete
 from app.core.templating import templates
 from app.db.session import get_db
+from app.schemas.event import PAGE_SIZE
 from app.services.host_user import get_host_user
 from app.services.user_settings import get_or_create_user_settings
 

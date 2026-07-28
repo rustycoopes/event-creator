@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import Event
 from app.models.processing_run import ProcessingRun, ProcessingRunStatus
+from app.schemas.event import PAGE_SIZE
 from tests.conftest import TokenFactory, create_host_user
 
 
@@ -46,6 +47,14 @@ async def _make_event(
     db.add(event)
     await db.flush()
     return event
+
+
+async def _make_events(
+    db: AsyncSession, user_id: uuid.UUID, run_id: uuid.UUID, count: int = 2
+) -> list[Event]:
+    return [
+        await _make_event(db, user_id, run_id, description=f"Event {i}") for i in range(count)
+    ]
 
 
 async def test_requires_auth(client: AsyncClient) -> None:
@@ -470,3 +479,122 @@ async def test_patch_requires_auth(client: AsyncClient) -> None:
     response = await client.patch(f"/api/v1/events/{uuid.uuid4()}", json={"reviewed": True})
 
     assert response.status_code == 401
+
+
+async def test_bulk_delete_requires_auth(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/v1/events/bulk-delete", json={"event_ids": [str(uuid.uuid4())]}
+    )
+
+    assert response.status_code == 401
+
+
+async def test_bulk_delete_rejects_empty_list(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    user_id = await create_host_user(db_session)
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.post(
+        "/api/v1/events/bulk-delete", cookies={"organizeme_auth": token}, json={"event_ids": []}
+    )
+
+    assert response.status_code == 422
+
+
+async def test_bulk_delete_rejects_over_page_size(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    user_id = await create_host_user(db_session)
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.post(
+        "/api/v1/events/bulk-delete",
+        cookies={"organizeme_auth": token},
+        json={"event_ids": [str(uuid.uuid4()) for _ in range(PAGE_SIZE + 1)]},
+    )
+
+    assert response.status_code == 422
+
+
+async def test_bulk_delete_rejects_extra_fields(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    user_id = await create_host_user(db_session)
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.post(
+        "/api/v1/events/bulk-delete",
+        cookies={"organizeme_auth": token},
+        json={"event_ids": [str(uuid.uuid4())], "reviewed": True},
+    )
+
+    assert response.status_code == 422
+
+
+async def test_bulk_delete_only_affects_the_callers_own_events(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """A request mixing the caller's own ids with another user's id and a nonexistent id deletes
+    only the caller's own events - never a 403, never a request-level 404 - and reports the rest
+    in failed_ids. This is the regression guard for the ownership-scoping guarantee (TDD § Testing
+    Approach), so it asserts on succeeded_ids/failed_ids contents, not just the status code."""
+    user_id = await create_host_user(db_session)
+    other_id = await create_host_user(db_session)
+    run_id = await _make_run(db_session, user_id)
+    other_run_id = await _make_run(db_session, other_id)
+    mine = await _make_events(db_session, user_id, run_id, count=2)
+    theirs = await _make_event(db_session, other_id, other_run_id, description="Theirs")
+    nonexistent_id = uuid.uuid4()
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.post(
+        "/api/v1/events/bulk-delete",
+        cookies={"organizeme_auth": token},
+        json={
+            "event_ids": [
+                str(mine[0].id),
+                str(mine[1].id),
+                str(theirs.id),
+                str(nonexistent_id),
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body["succeeded_ids"]) == {str(mine[0].id), str(mine[1].id)}
+    assert set(body["failed_ids"]) == {str(theirs.id), str(nonexistent_id)}
+
+    my_events = await client.get(
+        "/api/v1/events", cookies={"organizeme_auth": token}, params={"show_reviewed": "true"}
+    )
+    assert my_events.json()["total"] == 0
+
+    other_token = make_token.valid(sub=str(other_id))
+    their_events = await client.get(
+        "/api/v1/events",
+        cookies={"organizeme_auth": other_token},
+        params={"show_reviewed": "true"},
+    )
+    assert their_events.json()["total"] == 1
+
+
+async def test_bulk_delete_deduplicates_repeated_ids(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    user_id = await create_host_user(db_session)
+    run_id = await _make_run(db_session, user_id)
+    event = await _make_event(db_session, user_id, run_id)
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.post(
+        "/api/v1/events/bulk-delete",
+        cookies={"organizeme_auth": token},
+        json={"event_ids": [str(event.id), str(event.id)]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["succeeded_ids"] == [str(event.id)]
+    assert body["failed_ids"] == []
