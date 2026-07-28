@@ -135,7 +135,7 @@
     async bulkMarkReviewed() {
       // No confirm dialog (event-creator#42 TDD): one-directional and always sets reviewed=true,
       // so there is nothing destructive to gate behind a confirmation - matches the existing
-      // per-row Reviewed toggle's own no-confirmation behavior.
+      // per-row Reviewed toggles own no-confirmation behavior.
       this.bulkReviewing = true;
       this.error = "";
       try {
