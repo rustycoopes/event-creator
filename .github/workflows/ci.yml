@@ -29,6 +29,9 @@ jobs:
       GOOGLE_DRIVE_REDIRECT_URI: https://organizeme.qa.russcoopersoftware.com/api/v1/storage-config/google-drive/callback
       DROPBOX_OAUTH_CLIENT_ID: ${{ secrets.DROPBOX_OAUTH_CLIENT_ID }}
       DROPBOX_OAUTH_CLIENT_SECRET: ${{ secrets.DROPBOX_OAUTH_CLIENT_SECRET }}
+      # Fixed per-environment value (issue #201), not a secret - must match what's registered on
+      # the Dropbox app in the Dropbox App Console.
+      DROPBOX_OAUTH_REDIRECT_URI: https://organizeme.qa.russcoopersoftware.com/api/v1/storage-config/dropbox/callback
       # Storage-credential encryption key. Tests inject their own throwaway keys regardless, so
       # this has no effect on pass/fail - set for parity with organize-me's own ci.yml.
       ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
@@ -146,6 +149,7 @@ jobs:
           GOOGLE_DRIVE_REDIRECT_URI: "https://organizeme.qa.russcoopersoftware.com/api/v1/storage-config/google-drive/callback"
           BASE_URL: "https://organizeme.qa.russcoopersoftware.com"
           DROPBOX_OAUTH_CLIENT_ID: "${DROPBOX_OAUTH_CLIENT_ID}"
+          DROPBOX_OAUTH_REDIRECT_URI: "https://organizeme.qa.russcoopersoftware.com/api/v1/storage-config/dropbox/callback"
           GEMINI_API_KEY: "${GEMINI_API_KEY}"
           RESEND_API_KEY: "${RESEND_API_KEY}"
           TWILIO_ACCOUNT_SID: "${TWILIO_ACCOUNT_SID}"
