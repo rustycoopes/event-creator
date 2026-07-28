@@ -97,7 +97,7 @@ test.describe('Events dashboard', () => {
     const schoolRow = page.locator('#events-table tbody tr', { hasText: 'pick up from school' });
     const swimRow = page.locator('#events-table tbody tr', { hasText: 'swim meet' });
 
-    await expect(page.getByText('selected')).not.toBeVisible();
+    await expect(page.getByText(/^\d+ selected$/)).not.toBeVisible();
 
     await schoolRow.getByRole('checkbox', { name: 'Select event' }).check();
 
@@ -113,7 +113,7 @@ test.describe('Events dashboard', () => {
 
     await headerCheckbox.uncheck();
 
-    await expect(page.getByText('selected')).not.toBeVisible();
+    await expect(page.getByText(/^\d+ selected$/)).not.toBeVisible();
   });
 
   test('bulk delete removes only the selected events behind a confirm dialog showing the count, then clears selection', async ({
@@ -140,7 +140,7 @@ test.describe('Events dashboard', () => {
     await expect(page.getByText('1 event total')).toBeVisible();
     // Selection clears for free once the table refreshes (event-creator#41 TDD) - the toolbar
     // and header checkbox both go back to their empty state.
-    await expect(page.getByText('selected')).not.toBeVisible();
+    await expect(page.getByText(/^\d+ selected$/)).not.toBeVisible();
     await expect(page.getByRole('checkbox', { name: 'Select all events on this page' })).not.toBeChecked();
   });
 
@@ -154,12 +154,12 @@ test.describe('Events dashboard', () => {
     await expect(page.getByText('2 selected')).toBeVisible();
 
     await page.locator('#filter-type').selectOption('School');
-    await expect(page.getByText('selected')).not.toBeVisible();
+    await expect(page.getByText(/^\d+ selected$/)).not.toBeVisible();
 
     await page.getByRole('checkbox', { name: 'Select all events on this page' }).check();
     await expect(page.getByText('1 selected')).toBeVisible();
 
     await page.getByRole('link', { name: /^Sort:/ }).click();
-    await expect(page.getByText('selected')).not.toBeVisible();
+    await expect(page.getByText(/^\d+ selected$/)).not.toBeVisible();
   });
 });
