@@ -104,3 +104,14 @@ clean locally against the QA Supabase database. The e2e spec (`dashboard.spec.ts
 locally — this repo's Playwright suite targets the deployed QA app via the shared Load Balancer
 domain, not localhost, so it's verified through CI's `deploy-qa` → `e2e-qa` pipeline on the PR
 instead, per this repo's normal flow.
+
+A real bug slipped past both static code review and local `mypy`/pytest, and was only caught by
+CI's `e2e-qa` run against the deployed QA app: the JS comment "matches the existing per-row
+Reviewed toggle's own no-confirmation behavior" inside `bulkMarkReviewed()` contained an apostrophe,
+which prematurely closed the single-quoted `x-data='...'` HTML attribute. The remaining JS source
+leaked out as literal page text and corrupted the entire events table's rendering — not just the
+new button, every existing `dashboard.spec.ts` test failed the same run (5 failed, all timing out
+or failing to find elements, including pre-existing single-row delete/select-all specs untouched by
+this diff). Fixed by rewording the comment to avoid the apostrophe, verified by rendering the
+template directly with Jinja outside the test suite (confirmed the toolbar `</div>` now closes
+cleanly before `<table>`), then re-pushed for CI to re-verify.
