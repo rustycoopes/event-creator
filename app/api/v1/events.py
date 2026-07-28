@@ -6,28 +6,39 @@
 sort toggle, and a reviewed filter (all composable with pagination). ``DELETE
 /api/v1/events/{id}`` removes a single event and ``PATCH /api/v1/events/{id}`` toggles its
 reviewed flag, both scoped to the requesting user so no one can touch (or even discover the
-existence of) another user's event.
+existence of) another user's event. ``POST /api/v1/events/bulk-delete`` (event-creator#41,
+dashboard-bulk-actions Slice 1) is the same ownership-scoping guarantee applied set-wise: a
+best-effort bulk delete that reports per-id success/failure instead of 403/404ing the whole
+request.
 """
 
+import logging
 import uuid
 from datetime import date as date_
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Text, cast, func, or_, select
+from sqlalchemy import Text, cast, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import current_user_id
 from app.core.calendar_url import build_google_calendar_url, build_google_tasks_url
 from app.db.session import get_db
 from app.models.event import Event
-from app.schemas.event import EventListRead, EventRead, EventUpdate
+from app.schemas.event import (
+    PAGE_SIZE,
+    BulkActionResult,
+    BulkEventIdsRequest,
+    EventListRead,
+    EventRead,
+    EventUpdate,
+)
 
 SortOrder = Literal["asc", "desc"]
 
 router = APIRouter(prefix="/api/v1", tags=["events"])
 
-PAGE_SIZE = 50
+logger = logging.getLogger(__name__)
 
 
 def parse_date_param(value: str | None) -> date_ | None:
@@ -226,3 +237,38 @@ async def update_event(
     # No db.refresh() needed: the session is expire_on_commit=False (app/db/session.py), so `event`
     # still holds the value just assigned - refreshing would just be a wasted round-trip.
     return to_event_read(event)
+
+
+@router.post("/events/bulk-delete", response_model=BulkActionResult)
+async def bulk_delete_events(
+    body: BulkEventIdsRequest,
+    user_id: uuid.UUID = Depends(current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> BulkActionResult:
+    """Best-effort bulk delete, scoped to the requesting user like ``get_owned_event`` - an id
+    that doesn't exist or belongs to another user lands in ``failed_ids``, never a 403 and never a
+    404 for the request as a whole (see docs/adr/dashboard-bulk-actions-bulk-delete-http-method.md
+    for why this is POST, not DELETE with a body).
+
+    De-duplicates the requested ids before diffing against what the single ``RETURNING`` statement
+    actually deleted, so a repeated id doesn't throw off the "N of M" succeeded/failed count.
+    """
+    requested_ids = list(dict.fromkeys(body.event_ids))
+    result = await db.execute(
+        delete(Event)
+        .where(Event.id.in_(requested_ids), Event.user_id == user_id)
+        .returning(Event.id)
+    )
+    succeeded_ids = list(result.scalars().all())
+    await db.commit()
+    succeeded_set = set(succeeded_ids)
+    failed_ids = [event_id for event_id in requested_ids if event_id not in succeeded_set]
+    logger.info(
+        "bulk delete: user=%s requested=%d (deduped=%d) succeeded=%s failed=%s",
+        user_id,
+        len(body.event_ids),
+        len(requested_ids),
+        succeeded_ids,
+        failed_ids,
+    )
+    return BulkActionResult(succeeded_ids=succeeded_ids, failed_ids=failed_ids)

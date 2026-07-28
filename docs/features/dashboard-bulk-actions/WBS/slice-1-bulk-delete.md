@@ -91,4 +91,32 @@ tests — a request mixing owned and unowned/nonexistent IDs asserted on `succee
 `failed_ids` *contents*, not just status code, since that's the actual regression guard for the
 ownership-scoping guarantee.
 
-<!-- /to-implementation appends a "## Delivered" section here once this slice ships. -->
+## Delivered (2026-07-27, issue #41, branch `feature/dashboard-bulk-delete`)
+
+Shipped as planned: `POST /api/v1/events/bulk-delete` (single `RETURNING`-based `DELETE ... WHERE
+id IN (...) AND user_id = :user_id`), `BulkEventIdsRequest`/`BulkActionResult` schemas, and the
+checkbox column / select-all / bulk toolbar / confirm dialog in `events_panel.html`, all matching
+the two ADRs.
+
+Two things diverged from the plan during implementation and review:
+
+- `PAGE_SIZE` moved from `app/api/v1/events.py` into `app/schemas/event.py` (rather than staying
+  put) so `BulkEventIdsRequest`'s `max_length=PAGE_SIZE` could reuse it without a circular import
+  (`events.py` already imports from `schemas/event.py`). `app/pages/dashboard.py`'s import site was
+  updated to match; no other consumer existed.
+- Code review (`code-review-master`) caught a real bug in the first pass: the partial-failure "N of
+  M events deleted" message was assigned to the Alpine `error` field immediately before the same
+  function triggered the HTMX refresh that destroys and re-initializes that `x-data` scope — the
+  message was set and then wiped before ever rendering. Fixed by routing it through a
+  `sessionStorage` flash that the freshly-initialized scope's `init()` picks up after the swap,
+  which survives the DOM replacement. Verified live (not just by re-reading the diff): manually
+  forced a real partial-failure response (selected two events, deleted one out from under the
+  selection via direct DB access, confirmed the bulk delete) and confirmed the message renders and
+  persists after the refresh. One residual edge case, not fixed in this slice: if a partial-failure
+  bulk delete empties the page entirely, the flash message has nowhere to render until the next
+  page load that has events (the alert lives inside the same `{% if events %}` block as the rest of
+  the panel) — narrow enough (requires bulk-deleting literally everything on the page while some of
+  those deletes fail) that it wasn't worth the template restructuring to close in this slice.
+
+`code-quality-guardian`'s pass found no simplification or convention issues beyond three minor nits
+(module docstring, audit-log dedup-count phrasing, generic per-row `aria-label`), all addressed.

@@ -23,6 +23,18 @@
   event.id is a server-generated UUID (hex digits + hyphens only), so embedding it directly in
   a single-quoted JS string inside a double-quoted HTML attribute is safe - no user-controlled
   text (like the description) is ever inlined into an onclick-style attribute here.
+
+  Bulk-selection state (event-creator#41 / dashboard-bulk-actions Slice 1) is added to this same
+  flat x-data object rather than a nested scope - see TDD § Frontend: extending the existing
+  Alpine scope. selectedIds/allVisibleIds stay action-agnostic (no "delete"-specific knowledge)
+  so a future second bulk action can read them without touching the selection mechanism itself.
+  Selection resets to empty for free whenever this fragment is re-rendered (filter/sort/page
+  change, a bulk action completing, or a single-row delete completing) since the HTMX swap
+  replaces this whole x-data scope - no separate reset logic needed. That same swap is also why a
+  partial-failure message can't just be assigned to `error` before triggering the refresh: the
+  swap destroys this x-data instance (and the freshly-initialized replacement starts with
+  error: "") before the user has any chance to read it. init() below recovers it from
+  sessionStorage instead, which survives the innerHTML swap.
 #}
 <div
   class="overflow-x-auto mt-2"
@@ -30,6 +42,16 @@
     deleting: false,
     error: "",
     pendingId: null,
+    selectedIds: [],
+    allVisibleIds: {{ events | map(attribute="id") | map("string") | list | tojson }},
+    bulkDeleting: false,
+    init() {
+      const flash = sessionStorage.getItem("bulkDeleteFlash");
+      if (flash) {
+        this.error = flash;
+        sessionStorage.removeItem("bulkDeleteFlash");
+      }
+    },
     openConfirm(id) {
       this.pendingId = id;
       this.$refs.confirmModal.showModal();
@@ -69,13 +91,64 @@
         this.error = "Could not update this event. Please try again.";
       }
     },
+    openBulkConfirm() {
+      this.$refs.bulkConfirmModal.showModal();
+    },
+    async confirmBulkDelete() {
+      this.bulkDeleting = true;
+      this.error = "";
+      try {
+        const response = await fetch("/api/v1/events/bulk-delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ event_ids: this.selectedIds }),
+        });
+        if (!response.ok) throw new Error("bulk delete failed");
+        const result = await response.json();
+        this.$refs.bulkConfirmModal.close();
+        if (result.failed_ids.length > 0) {
+          const total = result.succeeded_ids.length + result.failed_ids.length;
+          // Stashed in sessionStorage, not assigned to `this.error` directly: the htmx swap below
+          // destroys this x-data instance before a directly-assigned error would ever render (see
+          // the module comment above). init() on the freshly-swapped-in instance picks this up.
+          sessionStorage.setItem(
+            "bulkDeleteFlash",
+            result.succeeded_ids.length + " of " + total + " events deleted."
+          );
+        }
+        // Same re-fetch pattern as toggleReviewed() above - also resets selectedIds to empty for
+        // free, since this whole x-data scope gets replaced by the swap.
+        htmx.ajax("GET", window.location.pathname + window.location.search, {
+          target: "#dashboard-body",
+          swap: "innerHTML",
+        });
+      } catch (e) {
+        this.error = "Could not delete the selected events. Please try again.";
+      } finally {
+        this.bulkDeleting = false;
+      }
+    },
   }'
 >
   {{ alert(variant="danger", x_show="error", x_text="error", class_="mb-2") }}
 
+  <div x-show="selectedIds.length > 0" x-cloak class="flex items-center gap-3 mb-2">
+    <span class="font-body text-sm text-ink-2 dark:text-paper-2" x-text="selectedIds.length + ' selected'"></span>
+    {{ button("Delete Selected", variant="danger-solid", attrs='@click="openBulkConfirm()"') }}
+  </div>
+
   <table class="{{ TABLE_CLASSES }}" id="events-table">
     <thead>
       <tr class="{{ TABLE_HEAD_ROW_CLASSES }}">
+        <th class="{{ TABLE_HEAD_CELL_CLASSES }} w-10">
+          <input
+            type="checkbox"
+            aria-label="Select all events on this page"
+            x-effect="$el.checked = allVisibleIds.length > 0 && selectedIds.length === allVisibleIds.length; $el.indeterminate = selectedIds.length > 0 && selectedIds.length < allVisibleIds.length"
+            @change="selectedIds = $event.target.checked ? [...allVisibleIds] : []"
+            class="h-4 w-4 cursor-pointer rounded border-ink-2/40 accent-cobalt dark:border-paper/40 {{ FOCUS_RING }}"
+          />
+        </th>
         <th class="{{ TABLE_HEAD_CELL_CLASSES }}">Type</th>
         <th class="{{ TABLE_HEAD_CELL_CLASSES }}">Description</th>
         <th class="{{ TABLE_HEAD_CELL_CLASSES }}">Resolved date</th>
@@ -90,6 +163,17 @@
     <tbody>
       {% for event in events %}
       <tr class="{{ TABLE_BODY_ROW_ZEBRA_CLASSES }}">
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}">
+          {# event.id is a server-generated UUID (see module docstring) - safe to interpolate
+             directly into this single-quoted HTML attribute. #}
+          <input
+            type="checkbox"
+            value="{{ event.id }}"
+            x-model="selectedIds"
+            aria-label="Select event: {{ event.description }}"
+            class="h-4 w-4 cursor-pointer rounded border-ink-2/40 accent-cobalt dark:border-paper/40 {{ FOCUS_RING }}"
+          />
+        </td>
         <td class="{{ TABLE_BODY_CELL_CLASSES }}">{{ event.type }}</td>
         <td class="{{ TABLE_BODY_CELL_CLASSES }}">{{ event.description }}</td>
         <td class="{{ TABLE_BODY_CELL_CLASSES }}">{{ event.resolved_date }}</td>
@@ -156,6 +240,21 @@
       {% call button(type="button", variant="danger-solid", x_bind_disabled="deleting", attrs='@click="confirmDelete"') %}
         <span x-show="!deleting">Delete</span>
         <span x-show="deleting" x-cloak>Deleting...</span>
+      {% endcall %}
+    </div>
+  </dialog>
+
+  <dialog
+    class="rounded-2xl border border-ink-2/10 bg-paper p-6 shadow-lg backdrop:bg-ink/50 dark:border-paper/10 dark:bg-ink-2"
+    x-ref="bulkConfirmModal"
+  >
+    <h3 class="font-display text-lg font-semibold text-ink dark:text-paper" x-text="'Delete ' + selectedIds.length + ' event' + (selectedIds.length === 1 ? '' : 's') + '?'"></h3>
+    <p class="mt-1 font-body text-sm text-ink-2 dark:text-paper-2">This cannot be undone.</p>
+    <div class="mt-4 flex justify-end gap-2">
+      {{ button("Cancel", variant="ghost", x_bind_disabled="bulkDeleting", attrs='@click="$refs.bulkConfirmModal.close()"') }}
+      {% call button(type="button", variant="danger-solid", x_bind_disabled="bulkDeleting", attrs='@click="confirmBulkDelete"') %}
+        <span x-show="!bulkDeleting">Delete</span>
+        <span x-show="bulkDeleting" x-cloak>Deleting...</span>
       {% endcall %}
     </div>
   </dialog>
