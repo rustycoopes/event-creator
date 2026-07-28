@@ -43,8 +43,9 @@ class EventUpdate(BaseModel):
 
 
 class BulkEventIdsRequest(BaseModel):
-    """Body shared by bulk endpoints (currently just bulk-delete) - just the target ids.
-    ``extra="forbid"`` so a stray unexpected field 422s loudly instead of silently no-op'ing.
+    """Body shared by bulk endpoints (bulk-delete and bulk-review) - just the target ids.
+    ``extra="forbid"`` so a stray unexpected field 422s loudly instead of silently no-op'ing - in
+    particular, a ``reviewed`` field here would 422 rather than making bulk-review bidirectional.
 
     ``max_length=PAGE_SIZE`` enforces "current page only" server-side too, not just in the
     frontend - an oversized or crafted request already represents invalid application state, so

@@ -598,3 +598,153 @@ async def test_bulk_delete_deduplicates_repeated_ids(
     body = response.json()
     assert body["succeeded_ids"] == [str(event.id)]
     assert body["failed_ids"] == []
+
+
+async def test_bulk_review_requires_auth(client: AsyncClient) -> None:
+    response = await client.post(
+        "/api/v1/events/bulk-review", json={"event_ids": [str(uuid.uuid4())]}
+    )
+
+    assert response.status_code == 401
+
+
+async def test_bulk_review_rejects_empty_list(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    user_id = await create_host_user(db_session)
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.post(
+        "/api/v1/events/bulk-review", cookies={"organizeme_auth": token}, json={"event_ids": []}
+    )
+
+    assert response.status_code == 422
+
+
+async def test_bulk_review_rejects_over_page_size(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    user_id = await create_host_user(db_session)
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.post(
+        "/api/v1/events/bulk-review",
+        cookies={"organizeme_auth": token},
+        json={"event_ids": [str(uuid.uuid4()) for _ in range(PAGE_SIZE + 1)]},
+    )
+
+    assert response.status_code == 422
+
+
+async def test_bulk_review_rejects_extra_fields(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """A ``reviewed`` field in the body 422s rather than being silently accepted - this is the
+    regression guard proving bulk-unreview is structurally unreachable through this endpoint."""
+    user_id = await create_host_user(db_session)
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.post(
+        "/api/v1/events/bulk-review",
+        cookies={"organizeme_auth": token},
+        json={"event_ids": [str(uuid.uuid4())], "reviewed": True},
+    )
+
+    assert response.status_code == 422
+
+
+async def test_bulk_review_only_affects_the_callers_own_events(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """Mirrors test_bulk_delete_only_affects_the_callers_own_events for bulk-review: a request
+    mixing the caller's own ids with another user's id and a nonexistent id marks only the
+    caller's own events reviewed - never a 403, never a request-level 404 - and reports the rest
+    in failed_ids."""
+    user_id = await create_host_user(db_session)
+    other_id = await create_host_user(db_session)
+    run_id = await _make_run(db_session, user_id)
+    other_run_id = await _make_run(db_session, other_id)
+    mine = await _make_events(db_session, user_id, run_id, count=2)
+    theirs = await _make_event(db_session, other_id, other_run_id, description="Theirs")
+    nonexistent_id = uuid.uuid4()
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.post(
+        "/api/v1/events/bulk-review",
+        cookies={"organizeme_auth": token},
+        json={
+            "event_ids": [
+                str(mine[0].id),
+                str(mine[1].id),
+                str(theirs.id),
+                str(nonexistent_id),
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body["succeeded_ids"]) == {str(mine[0].id), str(mine[1].id)}
+    assert set(body["failed_ids"]) == {str(theirs.id), str(nonexistent_id)}
+
+    my_events = await client.get(
+        "/api/v1/events", cookies={"organizeme_auth": token}, params={"show_reviewed": "true"}
+    )
+    assert {e["id"] for e in my_events.json()["events"]} == {str(mine[0].id), str(mine[1].id)}
+    assert all(e["reviewed"] for e in my_events.json()["events"])
+
+    other_token = make_token.valid(sub=str(other_id))
+    their_events = await client.get(
+        "/api/v1/events",
+        cookies={"organizeme_auth": other_token},
+        params={"show_reviewed": "true"},
+    )
+    assert their_events.json()["events"][0]["reviewed"] is False
+
+
+async def test_bulk_review_is_idempotent_on_already_reviewed_events(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """A selection mixing an already-reviewed event and a not-yet-reviewed one succeeds for both -
+    the already-reviewed one is never reported in failed_ids, since the endpoint doesn't scope its
+    WHERE to reviewed IS FALSE."""
+    user_id = await create_host_user(db_session)
+    run_id = await _make_run(db_session, user_id)
+    already_reviewed = await _make_event(
+        db_session, user_id, run_id, description="Already reviewed", reviewed=True
+    )
+    not_yet_reviewed = await _make_event(
+        db_session, user_id, run_id, description="Not yet reviewed", reviewed=False
+    )
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.post(
+        "/api/v1/events/bulk-review",
+        cookies={"organizeme_auth": token},
+        json={"event_ids": [str(already_reviewed.id), str(not_yet_reviewed.id)]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body["succeeded_ids"]) == {str(already_reviewed.id), str(not_yet_reviewed.id)}
+    assert body["failed_ids"] == []
+
+
+async def test_bulk_review_deduplicates_repeated_ids(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    user_id = await create_host_user(db_session)
+    run_id = await _make_run(db_session, user_id)
+    event = await _make_event(db_session, user_id, run_id)
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.post(
+        "/api/v1/events/bulk-review",
+        cookies={"organizeme_auth": token},
+        json={"event_ids": [str(event.id), str(event.id)]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["succeeded_ids"] == [str(event.id)]
+    assert body["failed_ids"] == []
