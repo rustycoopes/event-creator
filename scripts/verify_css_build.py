@@ -10,9 +10,19 @@ from pathlib import Path
 APP_CSS = Path(__file__).resolve().parent.parent / "app" / "static" / "css" / "app.css"
 MIN_BYTES = 1000
 
-# Only exists in the compiled output if the "Signal" @theme tokens were actually picked up - a
-# dropped tokens.css import or a broken @source glob both fail this check.
-CANARY_CLASS = ".bg-flame"
+# Only exist in the compiled output if the relevant @source glob actually got scanned. ".bg-flame"
+# alone wasn't enough to catch a real incident (organize-me#... event-creator dashboard's reviewed
+# toggle/import/bulk-review buttons going invisible): a Tailwind v4.3.3 CLI bug drops classes from
+# some (not all) subdirectories when a single recursive `**` glob is rooted inside a directory this
+# repo's own .gitignore excludes (`.venv`) and that root has more than one child directory -
+# ".bg-flame" happened to survive (it's the only chrome/design/classes.py-only class that was also
+# literal in an events_panel.html string at the time), but ".bg-amber" (only ever a Python dict
+# value in chrome/design/classes.py, never literal in any .html) and ".w-11" (only literal in
+# chrome/templates/components/toggle.html, a "components" subdirectory sibling to "macros") both
+# went missing. scripts/build_css.py works around the CLI bug by sourcing each subdirectory
+# separately instead of one glob spanning all of them - these two extra canaries would have failed
+# loudly instead of shipping invisible buttons/toggles.
+CANARY_CLASSES = (".bg-flame", ".bg-amber", ".w-11")
 
 
 def main() -> int:
@@ -31,10 +41,11 @@ def main() -> int:
         )
         return 1
 
-    if CANARY_CLASS not in css:
+    missing = [c for c in CANARY_CLASSES if c not in css]
+    if missing:
         print(
-            f"::error::canary class {CANARY_CLASS} is missing from app.css - "
-            "design tokens likely failed to compile in"
+            f"::error::canary class(es) {', '.join(missing)} missing from app.css - "
+            "design tokens or a @source glob likely failed to compile in"
         )
         return 1
 

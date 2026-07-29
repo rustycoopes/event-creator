@@ -17,7 +17,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-from organizeme_chrome.paths import chrome_fonts_dir, chrome_templates_dir, chrome_tokens_css_path
+from organizeme_chrome.paths import (
+    chrome_fonts_dir,
+    chrome_package_dir,
+    chrome_templates_dir,
+    chrome_tokens_css_path,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 APP_TEMPLATES_DIR = REPO_ROOT / "app" / "templates"
@@ -32,12 +37,40 @@ OUTPUT_CSS = STATIC_CSS_DIR / "app.css"
 TAILWINDCSS_VERSION = "v4.3.3"
 
 
+def _source_lines(base: Path, suffix: str) -> list[str]:
+    """One `@source` line per immediate child of `base`, instead of a single `base/**/<suffix>`.
+
+    Tailwind v4.3.3's CLI silently drops classes from some (not all) subdirectories when a single
+    recursive `**` glob is rooted inside a directory this repo's own .gitignore excludes (here,
+    `.venv`) and that root has more than one child directory - confirmed by isolating chrome's
+    templates/ dir (components/ + macros/ + 2 root files): one `templates/**/*.html` @source
+    silently dropped every class unique to components/toggle.html (w-11, before:*, checked:*)
+    while still picking up macros/ classes, but splitting into a line per child (each still using
+    `**` internally, just not spanning multiple top-level children in one glob) picked up
+    everything. Recursion *within* a single child directory is fine either way - only a `**` that
+    has to cross multiple sibling directories under the gitignored root misbehaves.
+    """
+    lines = [f'@source "{base.as_posix()}/*{suffix}";']
+    for child in sorted(base.iterdir()):
+        if child.is_dir() and child.name != "__pycache__":
+            lines.append(f'@source "{child.as_posix()}/**/*{suffix}";')
+    return lines
+
+
 def _write_entry_css() -> None:
     entry = "\n".join(
         [
             '@import "tailwindcss";',
             f'@source "{APP_TEMPLATES_DIR.as_posix()}/**/*.html";',
-            f'@source "{chrome_templates_dir().as_posix()}/**/*.html";',
+            *_source_lines(chrome_templates_dir(), ".html"),
+            # chrome's button/badge/status/alert variant classes (e.g. BUTTON_VARIANT_CLASSES in
+            # design/classes.py) are Python dict values, not literal text in any .html template -
+            # without this, Tailwind's scanner never sees them (design/ isn't under templates/,
+            # and the whole package sits inside .venv, which .gitignore excludes from Tailwind's
+            # own automatic-content-detection heuristic). Only organize-me itself gets these
+            # classes for free, since there design/classes.py is a tracked source file, not an
+            # installed dependency inside a gitignored .venv.
+            *_source_lines(chrome_package_dir() / "design", ".py"),
             f'@import "{chrome_tokens_css_path().as_posix()}";',
         ]
     )
