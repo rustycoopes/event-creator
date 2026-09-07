@@ -2,7 +2,8 @@
 Creator in Slice R8; dispatch switched from Celery to Cloud Tasks per
 docs/adr/0001-event-creator-worker-cpu-throttling.md in organize-me).
 
-``POST /api/v1/upload`` accepts a ``.txt`` / ``.zip`` / ``.csv`` export, writes it into the user's
+``POST /api/v1/upload`` accepts a WhatsApp export - chat text or an archive (ZIP/gzip),
+classified by content not extension (#47) - writes it into the user's
 connected storage watch folder (or an ephemeral in-memory fallback, issue #79), records a
 ``processing_runs`` row, and dispatches the 7-step pipeline as a **Cloud Tasks push task** -
 targeting this same service's ``POST /internal/pipeline/run`` (``app.api.v1.internal_pipeline``).
@@ -17,7 +18,6 @@ behaviour is covered directly in tests against ``app.services.pipeline.runner.ru
 import base64
 import logging
 import uuid
-from pathlib import PurePosixPath
 from typing import Protocol
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
@@ -25,6 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.storage_config import get_user_storage_config
+from app.core.archive import decode_text, sniff_archive
 from app.core.auth import current_user_id
 from app.core.config import Settings, get_settings
 from app.core.prompts import FACTORY_DEFAULT_PROMPT
@@ -48,7 +49,6 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["upload"])
 
-ALLOWED_EXTENSIONS = {".txt", ".zip", ".csv"}
 MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10 MB (per organize-me #52's resolved decision)
 
 
@@ -262,11 +262,6 @@ async def upload_file(
     scheduler: PipelineScheduler = Depends(get_pipeline_scheduler),
 ) -> dict[str, str]:
     filename = file.filename or ""
-    extension = PurePosixPath(filename).suffix.lower()
-    if extension not in ALLOWED_EXTENSIONS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="unsupported_file_type"
-        )
 
     # Read at most one byte past the cap so an oversized upload is rejected without pulling the
     # whole (potentially huge) file into memory first.
@@ -277,6 +272,16 @@ async def upload_file(
         )
     if not content:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="empty_file")
+
+    # Accept by content, not extension (whatsapp-archive-import #47): an archive by its magic
+    # bytes, or anything that decodes to NUL-free text (.txt / .csv / a renamed export). A
+    # dragged-in photo or PDF carries a NUL byte early and is rejected here so the user gets a
+    # synchronous error instead of a failed run. Advisory only - the pipeline runner is the
+    # authoritative classifier (docs/adr/whatsapp-archive-import-detection-and-module.md).
+    if sniff_archive(content) is None and "\x00" in decode_text(content):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="unsupported_file_type"
+        )
 
     # Write the bytes into the watch folder, then record the run so the pipeline (and the SSE
     # progress page) have a row to drive. A Drive/Dropbox API failure here (expired token,

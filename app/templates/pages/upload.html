@@ -13,8 +13,8 @@
   <div class="w-full max-w-lg">
   {% call card_shell(title="Upload a conversation") %}
     <p class="font-body text-sm text-ink-2 dark:text-paper-2">
-      Upload a WhatsApp export (<code>.txt</code>, <code>.zip</code>, or <code>.csv</code>). We'll
-      extract the agreed events and add them to your dashboard.
+      Upload a WhatsApp export — chat text or a <code>.zip</code>, with or without media, even if
+      the file was renamed. We'll extract the agreed events and add them to your dashboard.
     </p>
 
     {#
@@ -51,7 +51,7 @@
         },
         messageFor(detail) {
           const map = {
-            unsupported_file_type: "Please upload a .txt, .zip, or .csv file.",
+            unsupported_file_type: "That looks like an image or other binary file. Upload a WhatsApp chat export (text or a .zip).",
             file_too_large: "That file is too large (the maximum is 10 MB).",
             empty_file: "That file is empty.",
             storage_error: "Could not reach your storage provider. Try reconnecting it in Settings, or try again in a moment.",
@@ -99,13 +99,12 @@
           Drag a file here, or <span class="font-medium text-cobalt underline-offset-2 hover:underline dark:text-cobalt">browse</span>
         </p>
         <p class="font-body font-medium text-ink dark:text-paper" x-show="uploading" x-cloak>Uploading…</p>
-        <p class="font-body text-xs text-ink-2 dark:text-paper-2">.txt, .zip or .csv · up to 10 MB</p>
+        <p class="font-body text-xs text-ink-2 dark:text-paper-2">chat text or a .zip export · up to 10 MB</p>
         <input
           type="file"
           id="file-input"
           x-ref="fileInput"
           class="hidden"
-          accept=".txt,.zip,.csv"
           @change="submitFile($event.target.files)"
         />
       </div>
