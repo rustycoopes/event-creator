@@ -74,3 +74,34 @@ None — independent of Slice 1
   the "kept full history" step log line.
 
 <!-- /to-implementation appends a "## Delivered" section here once this slice ships. -->
+
+## Delivered (2026-09-07, issue #48, branch `feature/whatsapp-archive-import-locale-dates`)
+
+Shipped as planned. `app/core/message_filter.py` now recognises iOS bracketed exports (ISO
+`[YYYY-MM-DD, HH:MM:SS]` and ambiguous `[D/M/YY, H:MM:SS AM/PM]`), Android 12- and 24-hour lines,
+and `.`/`-`/`/` date separators, via an ordered `_FORMATS` table of `(compiled_regex, is_iso)`
+tuples (first match wins). Every pattern is `^`-anchored and consumes the whole timestamp through
+its trailing separator (` - ` Android, `] ` iOS) plus a `(?=\S)` sender lookahead, so a message
+body like `12/25/26 is Christmas` is never read as a new dated line. `_infer_date_order(lines)`
+does one pre-scan (any ambiguous line with first component > 12 → DMY; otherwise MDY, matching the
+historical `%m/%d/%y` tie-break); `_parse_line_date(line, order)` stays pure and takes the resolved
+order. AM/PM separator char class includes U+202F and U+00A0; 2-digit years use the `%y` pivot
+(69–99 → 19xx).
+
+`filter_messages_within_window` now returns `FilterResult(text, format_recognised)` (dataclass, not
+a tuple). The pipeline runner's Filter-by-Date step logs `"date format not recognised — kept the
+full conversation history"` when `format_recognised` is `False`.
+
+Divergences from the plan:
+
+- `_infer_date_order` implements only the "first component > 12 → DMY, else MDY" rule directly — the
+  ADR's intermediate "second > 12 → MDY" branch is dead code since it produces the same result as
+  the final tie-break, so it was left out with a comment pointing at the ADR.
+- No changelog line: event-creator has no `docs/changelog.md` (unlike organize-me); the Delivered
+  section is the delivery record here.
+
+`app/core/date_parser.py` untouched (out of scope). Tests: `tests/test_message_filter.py` extended
+with the new-format table + a regression block re-asserting the pre-Slice-2 US-Android behaviour
+(all pass locally); `tests/test_pipeline_runner.py` gained one unrecognised-format case asserting
+the "kept full history" step log (DB-backed — runs in CI against Supabase QA, not locally
+reachable). `mypy app tests` clean.

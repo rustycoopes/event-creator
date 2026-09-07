@@ -347,11 +347,13 @@ async def run_pipeline(
 
     # Step 3 - Filter by Date (keep only the recent window before the LLM sees it).
     step = await _begin_step(session, run.id, STEP_FILTER_BY_DATE)
-    filtered = filter_messages_within_window(conversation, window_days)
-    await _finish_step(
-        session, step, ProcessingStepStatus.SUCCESS,
-        [f"Kept messages within the last {window_days} days of the conversation"],
-    )
+    filter_result = filter_messages_within_window(conversation, window_days)
+    filtered = filter_result.text
+    if filter_result.format_recognised:
+        filter_log = f"Kept messages within the last {window_days} days of the conversation"
+    else:
+        filter_log = "date format not recognised — kept the full conversation history"
+    await _finish_step(session, step, ProcessingStepStatus.SUCCESS, [filter_log])
 
     # Step 4 - Call Gemini (fatal on error, no retry).
     step = await _begin_step(session, run.id, STEP_CALL_GEMINI)
