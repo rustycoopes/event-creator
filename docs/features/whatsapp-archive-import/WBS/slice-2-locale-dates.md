@@ -7,6 +7,8 @@
 `DD/MM/YYYY` locale, or with a 12-hour clock — not just US-Android exports — so those imports stop
 sending the entire chat history to the LLM on every run.
 
+> Published as [`rustycoopes/event-creator#48`](https://github.com/rustycoopes/event-creator/issues/48).
+
 ## What to build
 
 Extend `app/core/message_filter.py`:
@@ -46,8 +48,9 @@ Extend `app/core/message_filter.py`:
 
 ## Blocked by
 
-None — independent of Slice 1. (If both are in flight, whichever `runner.py` change lands second
-rebases the other's step edit.)
+None — independent of Slice 1
+([`#47`](https://github.com/rustycoopes/event-creator/issues/47)). If both are in flight, whichever
+`runner.py` change lands second rebases the other's step edit.
 
 ## Acceptance criteria
 

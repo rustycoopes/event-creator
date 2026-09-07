@@ -7,6 +7,8 @@
 anything at all is detected by its content, unpacked, and processed end to end — via both the
 manual Upload page and the watch-folder import.
 
+> Published as [`rustycoopes/event-creator#47`](https://github.com/rustycoopes/event-creator/issues/47).
+
 ## What to build
 
 A new pure module `app/core/archive.py` (no class, no protocol — plain functions, matching the
