@@ -27,7 +27,9 @@ async def test_upload_page_renders_dropzone_and_file_picker(
     body = response.text
     assert 'id="upload-dropzone"' in body
     assert 'id="file-input"' in body
-    assert 'accept=".txt,.zip,.csv"' in body
+    # No `accept` filter: a WhatsApp export routinely has no (or a wrong) extension - the file
+    # picker must show every file and the server classifies by content (#47).
+    assert "accept=" not in body
     assert "/api/v1/upload" in body
 
 

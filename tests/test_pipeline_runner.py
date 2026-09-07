@@ -8,6 +8,7 @@ itself, independent of the dispatch layer that invokes it in production (see tes
 that layer's own responsibilities: reconstructing collaborators from serialisable ids).
 """
 
+import gzip
 import io
 import json
 import uuid
@@ -15,9 +16,11 @@ import zipfile
 from datetime import date
 from pathlib import Path
 
+import pytest
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import archive
 from app.models.event import Event
 from app.models.processing_run import ProcessingRun, ProcessingRunStatus
 from app.models.processing_step import ProcessingStep, ProcessingStepStatus
@@ -469,3 +472,122 @@ async def test_notify_step_warns_when_delivery_fails(db_session: AsyncSession) -
     notify_step = steps[-1]
     assert notify_step.status == ProcessingStepStatus.SUCCESS
     assert "Warning: email delivery failed: Resend: recipient not verified" in notify_step.log_lines
+
+
+# --- Archive detection by content (whatsapp-archive-import #47) --------------------------
+# Wiring-only: the member-selection / decode / cap logic is covered directly in
+# tests/test_archive.py. Here we just prove the runner's Extract step routes through
+# app.core.archive by content, not by run.filename.
+
+
+async def test_extensionless_zip_is_detected_and_extracted(db_session: AsyncSession) -> None:
+    user_id = await create_host_user(db_session)
+    run = await _make_run(db_session, user_id, "whatsapp-export")  # no .zip suffix
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as zf:
+        zf.writestr("_chat.txt", "5/30/26, 10:00 - Russ: hi")
+    storage = FakeStorageProvider()
+    remote_file = await storage.upload_file("whatsapp-export", buffer.getvalue())
+
+    await run_pipeline(
+        db_session,
+        run=run,
+        user_id=user_id,
+        remote_file=remote_file,
+        storage=storage,
+        gemini=FakeGeminiClient(_EXAMPLE_OUTPUT),
+        notifier=FakeNotificationSender(),
+        prompt_text="extract events",
+    )
+
+    steps = await _steps(db_session, run.id)
+    assert steps[1].status == ProcessingStepStatus.SUCCESS
+    assert any("no .zip extension" in line for line in steps[1].log_lines)
+    assert run.status == ProcessingRunStatus.SUCCESS
+    assert len(await _events(db_session, user_id)) == _EXPECTED_NEW_EVENTS
+
+
+async def test_gzip_single_file_export_is_decompressed(db_session: AsyncSession) -> None:
+    user_id = await create_host_user(db_session)
+    run = await _make_run(db_session, user_id, "chat.txt.gz")
+    storage = FakeStorageProvider()
+    remote_file = await storage.upload_file(
+        "chat.txt.gz", gzip.compress(b"5/30/26, 10:00 - Russ: hi")
+    )
+
+    await run_pipeline(
+        db_session,
+        run=run,
+        user_id=user_id,
+        remote_file=remote_file,
+        storage=storage,
+        gemini=FakeGeminiClient(_EXAMPLE_OUTPUT),
+        notifier=FakeNotificationSender(),
+        prompt_text="extract events",
+    )
+
+    steps = await _steps(db_session, run.id)
+    assert steps[1].status == ProcessingStepStatus.SUCCESS
+    assert run.status == ProcessingRunStatus.SUCCESS
+    assert len(await _events(db_session, user_id)) == _EXPECTED_NEW_EVENTS
+
+
+async def test_binary_file_on_the_non_archive_path_fails_the_run(db_session: AsyncSession) -> None:
+    # The watch-folder import has no upload-endpoint gate, so the runner must reject a photo/PDF
+    # dragged into the folder itself rather than decode it to garbage and bill Gemini for it.
+    user_id = await create_host_user(db_session)
+    run = await _make_run(db_session, user_id, "IMG_4821.jpg")
+    storage = FakeStorageProvider()
+    remote_file = await storage.upload_file(
+        "IMG_4821.jpg", b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01 ... \x00\x00 binary"
+    )
+    notifier = FakeNotificationSender()
+
+    await run_pipeline(
+        db_session,
+        run=run,
+        user_id=user_id,
+        remote_file=remote_file,
+        storage=storage,
+        gemini=FakeGeminiClient(_EXAMPLE_OUTPUT),
+        notifier=notifier,
+        prompt_text="extract events",
+    )
+
+    steps = await _steps(db_session, run.id)
+    assert steps[1].status == ProcessingStepStatus.FAILED
+    assert run.status == ProcessingRunStatus.FAILED
+    assert storage.moved[remote_file.id] == FileDestination.FAILED
+    assert len(await _events(db_session, user_id)) == 0
+
+
+async def test_over_cap_archive_fails_the_run_with_the_size_message(
+    db_session: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(archive, "MAX_DECOMPRESSED_BYTES", 1024)
+    user_id = await create_host_user(db_session)
+    run = await _make_run(db_session, user_id, "huge.zip")
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("_chat.txt", b"a" * 8192)  # expands well past the patched 1 KB cap
+    storage = FakeStorageProvider()
+    remote_file = await storage.upload_file("huge.zip", buffer.getvalue())
+    notifier = FakeNotificationSender()
+
+    await run_pipeline(
+        db_session,
+        run=run,
+        user_id=user_id,
+        remote_file=remote_file,
+        storage=storage,
+        gemini=FakeGeminiClient(_EXAMPLE_OUTPUT),
+        notifier=notifier,
+        prompt_text="extract events",
+    )
+
+    steps = await _steps(db_session, run.id)
+    assert steps[1].status == ProcessingStepStatus.FAILED
+    assert any("too large" in line for line in steps[1].log_lines)
+    assert run.status == ProcessingRunStatus.FAILED
+    assert storage.moved[remote_file.id] == FileDestination.FAILED
+    assert len(await _events(db_session, user_id)) == 0

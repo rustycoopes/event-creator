@@ -3,7 +3,7 @@ Slice R11, #166 - this page was missed when R8 ported the rest of the Upload/Pip
 Logs feature area, since R8 only needed the ``POST /api/v1/upload`` API for its own tests; the R11
 routing cutover surfaced the gap before it could reach QA).
 
-Drag-and-drop + file-picker for a ``.txt``/``.zip``/``.csv`` export, which it POSTs to
+Drag-and-drop + file-picker for a WhatsApp export (chat text or a ZIP/gzip archive), which it POSTs to
 ``/api/v1/upload`` and then follows to the processing progress page. Anonymous visitors are
 redirected to /login like the other authenticated pages (app.core.auth).
 

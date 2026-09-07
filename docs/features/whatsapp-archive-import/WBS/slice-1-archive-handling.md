@@ -99,3 +99,67 @@ None — can start immediately.
   below that layer.
 
 <!-- /to-implementation appends a "## Delivered" section here once this slice ships. -->
+
+## Delivered (2026-09-07, issue #47, branch `feature/whatsapp-archive-import-slice-1`)
+
+**What shipped:** New pure module `app/core/archive.py` (`sniff_archive`, `decode_text`,
+`extract_chat_text` → `ChatExtraction` / `ArchiveError`, `MAX_DECOMPRESSED_BYTES = 20 MB`). The
+runner's Extract step now classifies by content (`sniff_archive`) rather than
+`run.filename.endswith(".zip")`; `run.filename` is used only for log wording ("… (no .zip
+extension)") and the gzip member name. The former `_extract_zip` helper and the
+`content.decode("utf-8", errors="replace")` line are gone — both replaced by the archive module,
+so UTF-16 / BOM exports decode correctly on every path. The Upload endpoint drops
+`ALLOWED_EXTENSIONS` / the suffix check; after the size + empty checks it accepts anything that
+sniffs as an archive or `decode_text`s to NUL-free text, and returns `400 unsupported_file_type`
+otherwise (whole buffer decoded, not a sample).
+
+**Member selection (ZIP):** regular files only (skip dir entries, `__MACOSX/`, `._`-prefixed
+basenames via `PurePosixPath`); exact `_chat.txt` (case-insensitive) → largest `*.txt` by
+`(-file_size, name)` → a **dot-free** basename that decodes NUL-free → else
+`ArchiveError("The archive doesn't contain a readable chat text file.")`.
+
+**Divergences from the plan:**
+
+- Step 3 of ZIP member selection was tightened from the spec's literal "first entry whose bytes
+  `decode_text` to NUL-free text" to "first entry whose basename contains **no dot**". A
+  `.docx`-shaped ZIP's members (`[Content_Types].xml`, `_rels/.rels`, …) are all NUL-free text, so
+  the literal rule would have fed Office XML to Gemini and never reached the `ArchiveError` that
+  AC #5 requires. Dot-free-basename still allows a genuinely extensionless chat file while
+  excluding Office parts, media and dotfiles.
+- The over-cap ("too large") message lands in the Extract step log; the run-level failure message
+  stays the generic "Could not extract a chat from the archive." per the TDD (agreed with the
+  user at `/to-implementation`).
+- gzip decompression also rejects NUL-containing output as `ArchiveError` (a gzipped photo fails
+  cleanly instead of sending replacement-char garbage downstream) — a small addition consistent
+  with the module's "readable chat text or raise" contract.
+- Upload page (`upload.html`): the `accept=".txt,.zip,.csv"` filter was removed (a renamed export
+  is invisible to a filtered picker) and the copy / `unsupported_file_type` message reworded.
+  `test_upload_page.py` updated to match. Not called out in the issue but required for "detected …
+  via the manual Upload page".
+- Encrypted-ZIP test fixture: Python's `zipfile` cannot *write* encrypted archives, so a small
+  traditional-PKWARE-encrypted ZIP is baked as a base64 constant in `tests/test_archive.py`.
+
+**Code review** (`/code-review`, high effort) flagged three items; two fixed in this slice:
+
+- *Extract step caught only `ArchiveError`.* A renamed ZIP using a compression method `zipfile`
+  can't inflate (deflate64, imploded) raises `NotImplementedError` from `ZipFile.open`, which
+  would have escaped and left the run non-terminal (Cloud Tasks retry loop, no failure email).
+  Fixed: `archive._extract_zip` now also converts `NotImplementedError` / `OSError` to
+  `ArchiveError`, and the runner's Extract step has an `except Exception` backstop that fails the
+  run terminally.
+- *Non-archive path had no binary guard.* A `.zip`-named corrupt file (fails `is_zipfile`) or a
+  photo reaching the runner via the watch-folder import (which has no upload-endpoint gate) was
+  decoded to replacement-char garbage and sent to Gemini. Fixed: the `kind is None` branch now
+  fails the run when the decoded text contains a NUL byte, matching the gzip path and the ADR's
+  "the runner must be able to reject junk on its own regardless."
+- *20 MB cap can reject a >20 MB text-only export arriving via the watch-folder path.* Working as
+  designed — this is the explicit trade in the decompression-cap ADR and TDD Open Question #2
+  (streaming `message_filter` is the deferred upgrade path, `ponytail:` note left in code). No
+  issue filed, per TDD Open Question #3.
+
+**Testing:** `tests/test_archive.py` (new, 27 cases, no DB), 4 wiring cases in
+`tests/test_pipeline_runner.py`, sniff cases in `tests/test_upload_api.py`
+(`test_upload_rejects_unsupported_extension` → `test_upload_rejects_binary_file`, now a real PNG).
+Full `mypy app tests` clean; affected suites pass locally against QA Supabase. `test_dispatch.py`
+/ `test_internal_pipeline_api.py` unchanged as planned. Slice 2 (`message_filter` locale dates)
+untouched.
