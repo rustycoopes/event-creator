@@ -187,6 +187,37 @@ async def test_csv_upload_skips_extract(db_session: AsyncSession) -> None:
     assert run.status == ProcessingRunStatus.SUCCESS
 
 
+async def test_unrecognised_date_format_logs_that_full_history_was_kept(
+    db_session: AsyncSession,
+) -> None:
+    user_id = await create_host_user(db_session)
+    run = await _make_run(db_session, user_id, "chat.txt")
+    storage = FakeStorageProvider()
+    # No line matches a known WhatsApp timestamp format, so the filter can't apply a window.
+    remote_file = await storage.upload_file(
+        "chat.txt", b"2026.08.01 09:00 Russ | hi\n2026.08.30 14:12 Christine | bye\n"
+    )
+
+    await run_pipeline(
+        db_session,
+        run=run,
+        user_id=user_id,
+        remote_file=remote_file,
+        storage=storage,
+        gemini=FakeGeminiClient(_EXAMPLE_OUTPUT),
+        notifier=FakeNotificationSender(),
+        prompt_text="extract events",
+    )
+
+    steps = await _steps(db_session, run.id)
+    filter_step = steps[2]  # step 3 - Filter by Date
+    assert filter_step.step_number == 3
+    assert any(
+        "date format not recognised" in line and "full conversation history" in line
+        for line in filter_step.log_lines
+    )
+
+
 async def test_duplicate_events_are_skipped(db_session: AsyncSession) -> None:
     user_id = await create_host_user(db_session)
     run = await _make_run(db_session, user_id, "chat.txt")

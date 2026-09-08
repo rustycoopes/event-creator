@@ -74,3 +74,45 @@ None — independent of Slice 1
   the "kept full history" step log line.
 
 <!-- /to-implementation appends a "## Delivered" section here once this slice ships. -->
+
+## Delivered (2026-09-07, issue #48, branch `feature/whatsapp-archive-import-locale-dates`)
+
+Shipped as planned. `app/core/message_filter.py` now recognises iOS bracketed exports (ISO
+`[YYYY-MM-DD, HH:MM:SS]` and ambiguous `[D/M/YY, H:MM:SS AM/PM]`), Android 12- and 24-hour lines,
+and `.`/`-`/`/` date separators, via an ordered `_FORMATS` table of `(compiled_regex, is_iso)`
+tuples (first match wins). Every pattern is `^`-anchored and consumes the whole timestamp through
+its trailing separator (` - ` Android, `] ` iOS) plus a `(?=\S)` sender lookahead, so a message
+body like `12/25/26 is Christmas` is never read as a new dated line. `_infer_date_order` resolves
+the day/month order once for the whole file by majority vote over the ambiguous lines (DMY only
+when strictly more lines can *only* be DMY than can *only* be MDY; otherwise MDY, matching the
+historical `%m/%d/%y` tie-break); `_parse_line_date(line, order)` stays pure and takes the resolved
+order. AM/PM separator char class includes U+202F and U+00A0; 2-digit years use the `%y` pivot
+(69–99 → 19xx). The "silent wrong window" limitation for genuinely-ambiguous DMY exports is
+documented in the `filter_messages_within_window` docstring per the ADR.
+
+`filter_messages_within_window` now returns `FilterResult(text, format_recognised)` (dataclass, not
+a tuple). The pipeline runner's Filter-by-Date step logs `"date format not recognised — kept the
+full conversation history"` when `format_recognised` is `False`.
+
+Divergences from the plan:
+
+- `_infer_date_order` uses a **majority vote** (DMY only when strictly more lines vote DMY than
+  MDY) rather than the ADR's literal "any line with first component > 12 → DMY". Code review
+  flagged that the ADR's any-line rule lets one rogue `28/6/26, …`-shaped line pasted into a
+  message body flip an entire US-Android export to DMY; the vote keeps a lone outlier from
+  overriding the file. Same result as the ADR for every real single-locale export.
+- `filter_messages_within_window` matches each line through the regex table **once** (into a
+  `list[_LineDate | None]`) and derives both the order and the per-line dates from it, instead of
+  scanning every line twice (once in `_infer_date_order`, once when parsing) — matters on the
+  ~100k-line exports the module is built for.
+- `format_recognised` means "a known timestamp format matched at least one line" (regex match),
+  not "at least one date parsed" — so the runner's "date format not recognised" log can't fire
+  for a file whose format *was* recognised but whose dates all failed to resolve.
+- No changelog line: event-creator has no `docs/changelog.md` (unlike organize-me); the Delivered
+  section is the delivery record here.
+
+`app/core/date_parser.py` untouched (out of scope). Tests: `tests/test_message_filter.py` extended
+with the new-format table + a regression block re-asserting the pre-Slice-2 US-Android behaviour
+(all pass locally); `tests/test_pipeline_runner.py` gained one unrecognised-format case asserting
+the "kept full history" step log (DB-backed — runs in CI against Supabase QA, not locally
+reachable). `mypy app tests` clean.
