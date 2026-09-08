@@ -86,19 +86,39 @@ def test_dotted_dmy_export_parses_with_inferred_order() -> None:
 
 
 def test_one_day_component_over_12_locks_the_whole_file_to_dmy() -> None:
-    # The anchor line 04/07/26 is ambiguous; only 13/06/26 disambiguates. Under DMY the anchor is
-    # 7 April, so a 7-day window drops the (earlier, but MDY-would-be-later) 13 June line.
+    # "13/06/26" only parses as DMY (day 13), and no line votes MDY, so the whole file is DMY:
+    # "04/07/26" is then 4 July 2026, not 7 April. Anchor = 4 July, so a 7-day window (cutoff
+    # 27 June) drops the 13 June line.
     conversation = "\n".join(
         [
-            "13/06/26, 09:00 - Russ Cooper: june message",
-            "04/07/26, 09:00 - Christine Cooper: april message",
+            "13/06/26, 09:00 - Russ Cooper: thirteenth of june",
+            "04/07/26, 09:00 - Christine Cooper: fourth of july",
         ]
     )
     result = filter_messages_within_window(conversation, window_days=7)
 
     assert result.format_recognised is True
-    assert "june message" not in result.text
-    assert "april message" in result.text
+    assert "thirteenth of june" not in result.text
+    assert "fourth of july" in result.text
+
+
+def test_one_rogue_dmy_looking_body_line_does_not_flip_an_mdy_file() -> None:
+    # An otherwise US-Android (MDY) export with a single pasted snippet whose day > 12 at column 0.
+    # Majority vote keeps the file MDY, so the anchor stays 6/28 and the window is applied normally.
+    conversation = "\n".join(
+        [
+            "6/1/26, 09:00 - Russ Cooper: old message",
+            "6/28/26, 09:00 - Christine Cooper: recent message",
+            "28/6/26, 09:00 - Someone: forwarded snippet inside a message body",
+            "6/28/26, 09:05 - Russ Cooper: another recent message",
+        ]
+    )
+    result = filter_messages_within_window(conversation, window_days=7)
+
+    assert result.format_recognised is True
+    assert "old message" not in result.text
+    assert "recent message" in result.text
+    assert "another recent message" in result.text
 
 
 def test_unrecognised_format_returns_whole_conversation_and_flags_it() -> None:

@@ -17,7 +17,7 @@ Sender:`` (iOS). Lines without a leading date are continuations of the preceding
 its keep/drop decision; any header lines before the first dated line are kept.
 
 Slash/dot dates are locale-ambiguous (``03/04/26`` is 4 March or 3 April). The day/month order is
-inferred **once per file** and defaults to MDY on a tie — see
+inferred **once per file** by majority vote and defaults to MDY on a tie — see
 ``docs/adr/whatsapp-archive-import-date-order-inference.md``. ``app/core/date_parser.py`` is a
 different job (it parses Gemini's *output* ``resolved_date``) and is not touched here.
 """
@@ -28,7 +28,7 @@ from datetime import date, timedelta
 
 # AM/PM is separated from the time by an ordinary space, U+00A0 (no-break) or U+202F (narrow
 # no-break, what iOS emits).
-_APM = r"[   ]?(?:[AaPp][Mm])"
+_APM = r"[ \xa0 ]?(?:[AaPp][Mm])"
 
 # Ordered list of (compiled regex, is_iso) — first match wins. Every pattern is ``^``-anchored and
 # consumes the *entire* timestamp through its trailing separator (`` - `` Android, ``] `` iOS) plus a
@@ -84,20 +84,19 @@ def _normalise_year(year: int) -> int:
     return 2000 + year if year < 69 else 1900 + year  # %y pivot: 69-99 -> 19xx
 
 
-def _infer_date_order(lines: list[str]) -> str:
-    """Resolve day/month order for the whole file. Any ambiguous line with a first component > 12
-    forces DMY; otherwise MDY (covers "second > 12 -> MDY", genuine conflict, and undecidable —
-    all of which the ADR maps to MDY, matching the historical ``%m/%d/%y`` behaviour). ISO lines
-    don't participate."""
-    for line in lines:
-        ld = _match_line(line)
-        if ld is not None and not ld.iso and ld.a > 12:
-            return "DMY"
-    return "MDY"
+def _infer_date_order(line_dates: list[_LineDate | None]) -> str:
+    """Resolve day/month order for the whole file by majority vote over the ambiguous lines: a
+    line whose first component is > 12 can only be DMY, one whose second is > 12 can only be MDY.
+    DMY wins only when strictly more lines vote DMY than MDY — so a single rogue line (e.g. a
+    pasted ``28/6/26, ...`` snippet inside a message body of an otherwise US-Android export)
+    can't flip the whole file. A tie (including no decisive line at all) → MDY, matching the
+    historical ``%m/%d/%y`` behaviour. ISO lines never participate."""
+    dmy = sum(1 for ld in line_dates if ld is not None and not ld.iso and ld.a > 12)
+    mdy = sum(1 for ld in line_dates if ld is not None and not ld.iso and ld.b > 12)
+    return "DMY" if dmy > mdy else "MDY"
 
 
-def _parse_line_date(line: str, order: str) -> date | None:
-    ld = _match_line(line)
+def _resolve(ld: _LineDate | None, order: str) -> date | None:
     if ld is None:
         return None
     if ld.iso or order == "MDY":
@@ -108,6 +107,11 @@ def _parse_line_date(line: str, order: str) -> date | None:
         return date(_normalise_year(ld.year), month, day)
     except ValueError:
         return None
+
+
+def _parse_line_date(line: str, order: str) -> date | None:
+    """Pure: parse one line's leading timestamp to a date under the already-resolved ``order``."""
+    return _resolve(_match_line(line), order)
 
 
 def filter_messages_within_window(
@@ -122,15 +126,25 @@ def filter_messages_within_window(
     upper bound only matters when a caller passes an explicit earlier anchor.
 
     ``FilterResult.format_recognised`` is ``False`` when no line matched any known WhatsApp
-    timestamp format — the text is returned unchanged (better to over-include than to silently
-    drop an unrecognised format) and the caller should note that the full history was kept.
+    timestamp format — the text is then returned unchanged (better to over-include than to
+    silently drop an unrecognised format) and the caller should note the full history was kept.
+
+    **Known limitation (silent wrong window):** for slash/dot dates the day/month order is
+    inferred per file (majority vote, MDY on a tie). A genuinely ambiguous export whose real
+    order is DMY *and* where no line has a day > 12 is parsed as MDY, so the returned window can
+    be the wrong slice — off by up to months. This is a token-cost optimisation, not a
+    correctness mechanism: a wrong window costs extra Gemini tokens or a few stale events, never
+    data loss. See the ADR (``whatsapp-archive-import-date-order-inference``).
     """
     lines = conversation.splitlines()
-    order = _infer_date_order(lines)
-    parsed = [_parse_line_date(line, order) for line in lines]
+    line_dates = [_match_line(line) for line in lines]
+    format_recognised = any(ld is not None for ld in line_dates)
+
+    order = _infer_date_order(line_dates)
+    parsed = [_resolve(ld, order) for ld in line_dates]
     dated = [d for d in parsed if d is not None]
     if not dated:
-        return FilterResult(conversation, format_recognised=False)
+        return FilterResult(conversation, format_recognised=format_recognised)
 
     effective_anchor = anchor if anchor is not None else max(dated)
     cutoff = effective_anchor - timedelta(days=window_days)

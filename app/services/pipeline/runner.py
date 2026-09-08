@@ -349,10 +349,10 @@ async def run_pipeline(
     step = await _begin_step(session, run.id, STEP_FILTER_BY_DATE)
     filter_result = filter_messages_within_window(conversation, window_days)
     filtered = filter_result.text
-    if filter_result.format_recognised:
-        filter_log = f"Kept messages within the last {window_days} days of the conversation"
-    else:
+    if not filter_result.format_recognised and filtered == conversation:
         filter_log = "date format not recognised — kept the full conversation history"
+    else:
+        filter_log = f"Kept messages within the last {window_days} days of the conversation"
     await _finish_step(session, step, ProcessingStepStatus.SUCCESS, [filter_log])
 
     # Step 4 - Call Gemini (fatal on error, no retry).
