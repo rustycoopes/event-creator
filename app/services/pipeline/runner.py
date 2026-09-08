@@ -20,12 +20,10 @@ step log, and still fires a (failure) notification. A run that produces zero new
 was a duplicate) is a *success*: the file moves to ``processed/`` and a "0 new events" notice fires.
 """
 
-import io
 import json
 import logging
 import re
 import uuid
-import zipfile
 from collections.abc import Iterable
 from datetime import datetime, timezone
 
@@ -33,6 +31,7 @@ from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.archive import ArchiveError, decode_text, extract_chat_text, sniff_archive
 from app.core.date_parser import parse_earliest_date
 from app.core.message_filter import filter_messages_within_window
 from app.models.event import Event
@@ -110,17 +109,6 @@ async def _finish_step(
     step.log_lines = list(log_lines)
     step.completed_at = _utcnow()
     await session.commit()
-
-
-def _extract_zip(content: bytes) -> tuple[bytes, str]:
-    """Return the bytes + name of the first regular file inside a zip archive. Raises if the
-    archive is unreadable or contains no files."""
-    with zipfile.ZipFile(io.BytesIO(content)) as archive:
-        names = [n for n in archive.namelist() if not n.endswith("/")]
-        if not names:
-            raise ValueError("archive contains no files")
-        first = names[0]
-        return archive.read(first), first
 
 
 def _parse_events(raw: str) -> list[ExtractedEvent]:
@@ -321,29 +309,55 @@ async def run_pipeline(
         [f"Received {run.filename} ({len(content)} bytes)"],
     )
 
-    # Step 2 - Extract (unzip .zip; skip for .txt/.csv).
+    # Step 2 - Extract. Classification is by *content*, never run.filename (whatsapp-archive-import
+    # #47): a WhatsApp export routinely arrives without a .zip extension, as a single-file gzip, or
+    # renamed. run.filename is used only for log wording and to name the gzip member.
     step = await _begin_step(session, run.id, STEP_EXTRACT)
-    if run.filename.lower().endswith(".zip"):
-        try:
-            content, inner_name = _extract_zip(content)
-        except Exception as exc:
+    kind = sniff_archive(content)
+    if kind is None:
+        conversation = decode_text(content)
+        if "\x00" in conversation:
+            # Not an archive and not readable text - a photo/PDF dragged into the watch folder
+            # (the upload endpoint fast-fails these, but the import path has no such gate).
             await _finish_step(
-                session, step, ProcessingStepStatus.FAILED, [f"Could not unzip archive: {exc}"]
+                session, step, ProcessingStepStatus.FAILED,
+                ["File is not a readable chat export (contains NUL bytes)"],
             )
             await _fail_run(
                 session, run, user_id, storage, remote_file, notifier,
-                "Could not extract the uploaded archive.",
+                "The uploaded file isn't a readable chat export.",
             )
             return
         await _finish_step(
-            session, step, ProcessingStepStatus.SUCCESS, [f"Extracted {inner_name}"]
+            session, step, ProcessingStepStatus.SKIPPED, ["Not an archive; extraction skipped"]
         )
     else:
+        try:
+            extraction = extract_chat_text(content, kind=kind, source_name=run.filename)
+        except ArchiveError as exc:
+            await _finish_step(session, step, ProcessingStepStatus.FAILED, [str(exc)])
+            await _fail_run(
+                session, run, user_id, storage, remote_file, notifier,
+                "Could not extract a chat from the archive.",
+            )
+            return
+        except Exception as exc:  # noqa: BLE001 - backstop: never leave the run non-terminal
+            logger.exception("pipeline: unexpected error extracting %s", run.filename)
+            await _finish_step(
+                session, step, ProcessingStepStatus.FAILED, [f"Unexpected extraction error: {exc}"]
+            )
+            await _fail_run(
+                session, run, user_id, storage, remote_file, notifier,
+                "Could not extract a chat from the archive.",
+            )
+            return
+        note = extraction.reason
+        if kind == "zip" and not run.filename.lower().endswith(".zip"):
+            note += " (no .zip extension)"
         await _finish_step(
-            session, step, ProcessingStepStatus.SKIPPED, ["Not a .zip; extraction skipped"]
+            session, step, ProcessingStepStatus.SUCCESS, [f"{note}: {extraction.member_name}"]
         )
-
-    conversation = content.decode("utf-8", errors="replace")
+        conversation = extraction.text
 
     # Step 3 - Filter by Date (keep only the recent window before the LLM sees it).
     step = await _begin_step(session, run.id, STEP_FILTER_BY_DATE)

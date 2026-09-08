@@ -10,7 +10,9 @@ login flow - every test seeds a `host.users` row via `create_host_user` and atta
 `make_token`.
 """
 
+import io
 import uuid
+import zipfile
 
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -83,7 +85,50 @@ async def test_upload_succeeds_with_ephemeral_fallback_when_drive_not_connected(
     assert isinstance(call["storage"], EphemeralStorageProvider)
 
 
-async def test_upload_rejects_unsupported_extension(
+async def test_upload_rejects_binary_file(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """Classification is by content, not extension (whatsapp-archive-import #47): a dragged-in
+    photo (or any file with a NUL byte, which every common binary format carries early) is
+    rejected synchronously with the unchanged detail string."""
+    user_id = await create_host_user(db_session)
+    cookies = {"organizeme_auth": make_token.valid(sub=str(user_id))}
+    _override_storage(FakeStorageProvider())
+    _override_scheduler(_RecordingScheduler())
+
+    png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01"
+    response = await client.post(
+        "/api/v1/upload",
+        files={"file": ("photo.png", png, "image/png")},
+        cookies=cookies,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "unsupported_file_type"
+
+
+async def test_upload_accepts_extensionless_zip_by_content(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as zf:
+        zf.writestr("_chat.txt", "5/30/26, 10:00 - Russ: hi")
+
+    user_id = await create_host_user(db_session)
+    cookies = {"organizeme_auth": make_token.valid(sub=str(user_id))}
+    _override_storage(FakeStorageProvider())
+    _override_scheduler(_RecordingScheduler())
+
+    response = await client.post(
+        "/api/v1/upload",
+        files={"file": ("whatsapp-export", buffer.getvalue(), "application/octet-stream")},
+        cookies=cookies,
+    )
+
+    assert response.status_code == 202
+
+
+async def test_upload_accepts_text_with_a_nonsense_extension(
     client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
 ) -> None:
     user_id = await create_host_user(db_session)
@@ -93,12 +138,11 @@ async def test_upload_rejects_unsupported_extension(
 
     response = await client.post(
         "/api/v1/upload",
-        files={"file": ("notes.pdf", b"hi", "application/pdf")},
+        files={"file": ("chat.wtf", b"5/30/26, 10:00 - Russ: hi", "application/octet-stream")},
         cookies=cookies,
     )
 
-    assert response.status_code == 400
-    assert response.json()["detail"] == "unsupported_file_type"
+    assert response.status_code == 202
 
 
 async def test_upload_rejects_file_over_size_cap(
