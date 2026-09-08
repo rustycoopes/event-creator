@@ -193,3 +193,63 @@ test.describe('Events dashboard', () => {
     await expect(page.getByText(/^\d+ selected$/)).not.toBeVisible();
   });
 });
+
+// mobile-responsive-tables Slice 1b (#49): post-deploy regression guard for the phone layout -
+// the events table flips to `.om-stacked-table` cards and the filter/sort form collapses behind
+// a "Filters (N)" toggle below lg (1024px). A 375px viewport override, not a separate Playwright
+// project or devices['Pixel 5'] (touch/UA emulation isn't what's under test - just width).
+test.describe('Events dashboard — mobile viewport', () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test('events table renders as labelled cards with no horizontal document scroll', async ({
+    page,
+  }) => {
+    await registerNewUser(page, 'dashboard-mobile-cards');
+    await uploadFileAndWaitForCompletion(page, 'chat.txt', 'E2E dashboard test conversation.\n');
+    await page.goto('/dashboard');
+
+    await expect(page.getByText('E2E test — pick up from school.')).toBeVisible();
+
+    // Card mode is active: the <table> is laid out as blocks, not a table.
+    await expect(page.locator('#events-table')).toHaveCSS('display', 'block');
+
+    // The data-label shows as the cell's ::before prefix (e.g. "Description: ").
+    const descLabel = await page
+      .locator('#events-table td[data-label="Description"]')
+      .first()
+      .evaluate((el) => window.getComputedStyle(el, '::before').content);
+    expect(descLabel).toContain('Description');
+
+    // No horizontal document scroll.
+    const overflowsX = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    );
+    expect(overflowsX).toBe(false);
+  });
+
+  test('filter form is collapsed until "Filters" is tapped and shows the active count', async ({
+    page,
+  }) => {
+    await registerNewUser(page, 'dashboard-mobile-filters');
+    await uploadFileAndWaitForCompletion(page, 'chat.txt', 'E2E dashboard test conversation.\n');
+    await page.goto('/dashboard');
+
+    const filterForm = page.locator('#event-filters');
+    await expect(filterForm).toBeHidden();
+
+    // Keyboard-operable: the sr-only toggle checkbox takes focus and Space opens the panel
+    // (it must not be `hidden`/unfocusable - that would strand keyboard users on mobile).
+    await page.locator('#event-filters-disclosure').press(' ');
+    await expect(filterForm).toBeVisible();
+    await page.locator('#event-filters-disclosure').press(' ');
+    await expect(filterForm).toBeHidden();
+
+    await page.getByText('Filters (0)').click();
+    await expect(filterForm).toBeVisible();
+
+    // The count re-renders with the fragment on every swap.
+    await page.locator('#filter-type').selectOption('School');
+    await expect(page).toHaveURL(/type=School/);
+    await expect(page.getByText('Filters (1)')).toBeVisible();
+  });
+});

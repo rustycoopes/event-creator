@@ -24,6 +24,13 @@ MIN_BYTES = 1000
 # loudly instead of shipping invisible buttons/toggles.
 CANARY_CLASSES = (".bg-flame", ".bg-amber", ".w-11")
 
+# Raw rule from organizeme_chrome's components.css (mobile-responsive-tables Slice 1b), pulled in
+# via a bare `@import` in scripts/build_css.py - NOT a scanned utility, so a Tailwind-scanning
+# regression can't touch it, but dropping the `@import` line (or bumping the chrome pin past a
+# version that removes it) would silently ship the Dashboard events table with no mobile card
+# layout. Fail the build loudly instead.
+STACKED_TABLE_RULE = ".om-stacked-table"
+
 
 def main() -> int:
     if not APP_CSS.is_file():
@@ -46,6 +53,14 @@ def main() -> int:
         print(
             f"::error::canary class(es) {', '.join(missing)} missing from app.css - "
             "design tokens or a @source glob likely failed to compile in"
+        )
+        return 1
+
+    if STACKED_TABLE_RULE not in css:
+        print(
+            f"::error::{STACKED_TABLE_RULE} missing from app.css - the chrome components.css "
+            "@import (scripts/build_css.py) didn't compile in; the Dashboard events table would "
+            "ship with no mobile card layout"
         )
         return 1
 

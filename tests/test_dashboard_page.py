@@ -371,6 +371,60 @@ async def test_import_button_enabled_when_storage_connected(
     assert "driveConnected: true" in response.text
 
 
+async def test_events_table_uses_the_stacked_table_card_pattern(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """mobile-responsive-tables Slice 1b: the events table adopts organizeme_chrome's
+    `.om-stacked-table` (flips to labelled cards below lg) - every <td> needs a data-label."""
+    user_id = await create_host_user(db_session)
+    run_id = await _make_run(db_session, user_id)
+    await _make_event(db_session, user_id, run_id)
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.get("/dashboard", cookies={"organizeme_auth": token})
+
+    assert "om-stacked-table" in response.text
+    assert 'data-label="Description"' in response.text
+    assert 'data-label="Reviewed"' in response.text
+
+
+async def test_filters_badge_counts_only_active_filter_fields(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """mobile-responsive-tables Slice 1b: the mobile "Filters (N)" disclosure badge counts the
+    active filter fields only - NOT `has_active_filters` (which folds in `event_types` and would
+    show a phantom count on an unfiltered page)."""
+    user_id = await create_host_user(db_session)
+    run_id = await _make_run(db_session, user_id)
+    await _make_event(db_session, user_id, run_id, description="Medical thing")
+    token = make_token.valid(sub=str(user_id))
+
+    unfiltered = await client.get("/dashboard", cookies={"organizeme_auth": token})
+    assert "Filters (0)" in unfiltered.text
+
+    two_filters = await client.get(
+        "/dashboard",
+        cookies={"organizeme_auth": token},
+        params={"type": "Medical", "q": "thing"},
+    )
+    assert "Filters (2)" in two_filters.text
+
+
+async def test_delete_confirm_dialogs_fit_a_narrow_viewport(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """mobile-responsive-tables Slice 1b: both <dialog> confirm modals are capped at the viewport
+    width so they don't overflow a 375px phone."""
+    user_id = await create_host_user(db_session)
+    run_id = await _make_run(db_session, user_id)
+    await _make_event(db_session, user_id, run_id)
+    token = make_token.valid(sub=str(user_id))
+
+    response = await client.get("/dashboard", cookies={"organizeme_auth": token})
+
+    assert response.text.count("max-w-[calc(100vw-2rem)]") == 2
+
+
 async def test_delete_button_is_gated_behind_confirm_modal(
     client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
 ) -> None:

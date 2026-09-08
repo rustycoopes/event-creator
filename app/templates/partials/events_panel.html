@@ -176,7 +176,10 @@
     {{ button("Delete Selected", variant="danger-solid", attrs='@click="openBulkConfirm()"') }}
   </div>
 
-  <table class="{{ TABLE_CLASSES }}" id="events-table">
+  {# om-stacked-table (organizeme_chrome components.css, mobile-responsive-tables Slice 1b):
+     below lg this table flips to labelled cards - every <td> below carries a data-label, <thead>
+     is kept (visually hidden) for assistive tech. Contract in packages/chrome/DESIGN.md. #}
+  <table class="{{ TABLE_CLASSES }} om-stacked-table" id="events-table">
     <thead>
       <tr class="{{ TABLE_HEAD_ROW_CLASSES }}">
         <th class="{{ TABLE_HEAD_CELL_CLASSES }} w-10">
@@ -202,7 +205,7 @@
     <tbody>
       {% for event in events %}
       <tr class="{{ TABLE_BODY_ROW_ZEBRA_CLASSES }}">
-        <td class="{{ TABLE_BODY_CELL_CLASSES }}">
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}" data-label="">
           {# event.id is a server-generated UUID (see module docstring) - safe to interpolate
              directly into this single-quoted HTML attribute. #}
           <input
@@ -213,11 +216,11 @@
             class="h-4 w-4 cursor-pointer rounded border-ink-2/40 accent-cobalt dark:border-paper/40 {{ FOCUS_RING }}"
           />
         </td>
-        <td class="{{ TABLE_BODY_CELL_CLASSES }}">{{ event.type }}</td>
-        <td class="{{ TABLE_BODY_CELL_CLASSES }}">{{ event.description }}</td>
-        <td class="{{ TABLE_BODY_CELL_CLASSES }}">{{ event.resolved_date }}</td>
-        <td class="{{ TABLE_BODY_CELL_CLASSES }}">{{ event.raw_date_text }}</td>
-        <td class="{{ TABLE_BODY_CELL_CLASSES }}">
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}" data-label="Type">{{ event.type }}</td>
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}" data-label="Description">{{ event.description }}</td>
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}" data-label="Resolved date">{{ event.resolved_date }}</td>
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}" data-label="Raw date text">{{ event.raw_date_text }}</td>
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}" data-label="Agreed by">
           {% for name in event.agreed_by %}
           <span
             class="inline-flex items-center rounded-full px-2 py-0.5 mr-1 font-body text-xs font-medium {{ BADGE_VARIANT_CLASSES['neutral'] }}"
@@ -225,7 +228,7 @@
           >{{ name | to_initials }}</span>
           {% endfor %}
         </td>
-        <td class="{{ TABLE_BODY_CELL_CLASSES }}">
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}" data-label="Calendar">
           {% if event.calendar_url %}
           <a
             href="{{ event.calendar_url }}" target="_blank" rel="noopener"
@@ -235,7 +238,7 @@
           <span class="opacity-50 text-sm">No date</span>
           {% endif %}
         </td>
-        <td class="{{ TABLE_BODY_CELL_CLASSES }}">
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}" data-label="Tasks">
           {% if event.tasks_url %}
           <a
             href="{{ event.tasks_url }}" target="_blank" rel="noopener"
@@ -245,7 +248,7 @@
           <span class="opacity-50 text-sm">No date</span>
           {% endif %}
         </td>
-        <td class="{{ TABLE_BODY_CELL_CLASSES }}">
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}" data-label="Reviewed">
           {# event.id is a server-generated UUID (see module docstring) - safe to interpolate
              directly into this single-quoted Alpine expression. #}
           {{ toggle(
@@ -254,7 +257,7 @@
             attrs='aria-label="Reviewed"'
           ) }}
         </td>
-        <td class="{{ TABLE_BODY_CELL_CLASSES }}">
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}" data-label="">
           {# button()'s attrs is rendered unescaped (| safe) - only safe to interpolate event.id
              here because it's a server-generated UUID (hex digits + hyphens only, see the
              module docstring above); never widen this to any value that could contain a quote. #}
@@ -266,7 +269,7 @@
   </table>
 
   <dialog
-    class="rounded-2xl border border-ink-2/10 bg-paper p-6 shadow-lg backdrop:bg-ink/50 dark:border-paper/10 dark:bg-ink-2"
+    class="max-w-[calc(100vw-2rem)] rounded-2xl border border-ink-2/10 bg-paper p-6 shadow-lg backdrop:bg-ink/50 dark:border-paper/10 dark:bg-ink-2"
     x-ref="confirmModal"
   >
     <h3 class="font-display text-lg font-semibold text-ink dark:text-paper">Delete this event?</h3>
@@ -284,7 +287,7 @@
   </dialog>
 
   <dialog
-    class="rounded-2xl border border-ink-2/10 bg-paper p-6 shadow-lg backdrop:bg-ink/50 dark:border-paper/10 dark:bg-ink-2"
+    class="max-w-[calc(100vw-2rem)] rounded-2xl border border-ink-2/10 bg-paper p-6 shadow-lg backdrop:bg-ink/50 dark:border-paper/10 dark:bg-ink-2"
     x-ref="bulkConfirmModal"
   >
     <h3 class="font-display text-lg font-semibold text-ink dark:text-paper" x-text="'Delete ' + selectedIds.length + ' event' + (selectedIds.length === 1 ? '' : 's') + '?'"></h3>
