@@ -17,7 +17,12 @@
 
 {% if runs %}
 <div class="overflow-x-auto mt-2">
-  <table class="{{ TABLE_CLASSES }}" id="logs-grid">
+  {# om-stacked-table (organizeme_chrome components.css, mobile-responsive-tables Slice 2):
+     below lg this table flips to labelled cards - every <td> below carries a data-label, <thead>
+     is kept (visually hidden) for assistive tech. The Details cell's max-w-xs/truncate is reset
+     by the card layout, so mobile shows the full detail text. Same contract as the Dashboard
+     events table (Slice 1b). #}
+  <table class="{{ TABLE_CLASSES }} om-stacked-table" id="logs-grid">
     <thead>
       <tr class="{{ TABLE_HEAD_ROW_CLASSES }}">
         {# aria-sort on the active column tells screen readers the grid's current sort state,
@@ -58,19 +63,19 @@
         onclick="window.location='/processing-runs/{{ run.id }}'"
         onkeydown="if (event.key === 'Enter') window.location='/processing-runs/{{ run.id }}'"
       >
-        <td class="{{ TABLE_BODY_CELL_CLASSES }}">
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}" data-label="Date">
           <a href="/processing-runs/{{ run.id }}" class="font-medium text-cobalt underline-offset-2 hover:underline dark:text-cobalt" onclick="event.stopPropagation()">
             {{ run.created_at }}
           </a>
         </td>
-        <td class="{{ TABLE_BODY_CELL_CLASSES }}">{{ run.filename }}</td>
-        <td class="{{ TABLE_BODY_CELL_CLASSES }}">
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}" data-label="Filename">{{ run.filename }}</td>
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}" data-label="Status">
           <span class="inline-flex items-center rounded-full px-2 py-0.5 font-body text-xs font-medium {% if run.status == 'success' %}{{ BADGE_VARIANT_CLASSES['success'] }}{% elif run.status == 'failed' %}{{ BADGE_VARIANT_CLASSES['danger'] }}{% elif run.status == 'in_progress' %}{{ BADGE_VARIANT_CLASSES['info'] }}{% else %}{{ BADGE_VARIANT_CLASSES['neutral'] }}{% endif %}">
             {{ run.status }}
           </span>
         </td>
-        <td class="{{ TABLE_BODY_CELL_CLASSES }}">{{ run.events_extracted_count }}</td>
-        <td class="{{ TABLE_BODY_CELL_CLASSES }} max-w-xs truncate" title="{{ run.detail_summary }}">{{ run.detail_summary }}</td>
+        <td class="{{ TABLE_BODY_CELL_CLASSES }}" data-label="Events">{{ run.events_extracted_count }}</td>
+        <td class="{{ TABLE_BODY_CELL_CLASSES }} max-w-xs truncate" data-label="Details" title="{{ run.detail_summary }}">{{ run.detail_summary }}</td>
       </tr>
       {% endfor %}
     </tbody>

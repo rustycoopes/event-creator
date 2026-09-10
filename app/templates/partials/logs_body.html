@@ -12,13 +12,28 @@
 #}
 {% from "components/input.html" import input %}
 {% from "components/select.html" import select %}
+{# Mobile filter disclosure (mobile-responsive-tables Slice 2): below lg the filter/sort form
+   collapses behind a "Filters (N)" toggle so the runs table fills the first screen. Pure-CSS
+   checkbox-`peer` (same pattern as the Dashboard, Slice 1b); the checkbox lives inside this HTMX
+   fragment so it resets to collapsed on every swap - fine for single-tap filters, and
+   active_filter_count re-renders with the fragment so "(N)" is always current. Logs has no
+   free-text search input, so the Dashboard's hx-trigger change doesn't apply here. #}
+{# `sr-only` (not `hidden`) so the toggle stays keyboard-focusable / Space-operable below lg;
+   `lg:hidden` drops it from the tab order at lg+, where the form is always shown anyway. #}
+<input id="run-filters-disclosure" type="checkbox" class="peer sr-only lg:hidden" />
+<label
+  for="run-filters-disclosure"
+  class="lg:hidden mt-2 inline-flex cursor-pointer items-center gap-1 rounded-md font-body text-sm font-medium text-ink dark:text-paper peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-cobalt"
+>
+  Filters ({{ active_filter_count }})
+</label>
 <form
   id="run-filters"
   hx-get="/logs"
   hx-target="#logs-body"
   hx-push-url="true"
   hx-trigger="change"
-  class="flex flex-wrap gap-2 items-end mt-2"
+  class="hidden peer-checked:flex lg:flex flex-wrap gap-2 items-end mt-2"
 >
   {# Carries the current sort so a filter change doesn't reset it back to newest-first; the
      column-header sort links below are the only thing that changes these values. #}
