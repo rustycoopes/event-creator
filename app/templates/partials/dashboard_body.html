@@ -13,13 +13,34 @@
 {% from "components/select.html" import select %}
 {% from "components/toggle.html" import toggle %}
 {% from "components/button.html" import button %}
+{# Mobile filter disclosure (mobile-responsive-tables Slice 1b): below lg the filter/sort form
+   collapses behind a "Filters (N)" toggle so the events table fills the first screen. Pure-CSS
+   checkbox-`peer` (same pattern as chrome's sidebar drawer, zero JS); the checkbox lives inside
+   this HTMX fragment so it resets to collapsed on every swap - fine for single-tap filters, and
+   active_filter_count re-renders with the fragment so "(N)" is always current. See
+   docs/adr/mobile-responsive-tables-filter-disclosure.md in organize-me. #}
+{# `sr-only` (not `hidden`) so the toggle stays keyboard-focusable / Space-operable below lg;
+   `lg:hidden` drops it from the tab order at lg+, where the form is always shown anyway. #}
+<input id="event-filters-disclosure" type="checkbox" class="peer sr-only lg:hidden" />
+<label
+  for="event-filters-disclosure"
+  class="lg:hidden mt-2 inline-flex cursor-pointer items-center gap-1 rounded-md font-body text-sm font-medium text-ink dark:text-paper peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-cobalt"
+>
+  Filters ({{ active_filter_count }})
+</label>
 <form
   id="event-filters"
   hx-get="/dashboard"
   hx-target="#dashboard-body"
   hx-push-url="true"
-  hx-trigger="change, keyup changed delay:500ms from:input[type='text']"
-  class="flex flex-wrap gap-3 items-end mt-2"
+  {# Search trigger, per the filter-disclosure ADR: desktop keeps debounced live-as-you-type
+     (`keyup`, gated to lg+ so a committed `?q=` re-renders the sort/pagination links with it);
+     below lg it commits only on `change` (blur) / `search` (type=search clear button or Enter,
+     bound to #filter-search via from: as it doesn't bubble), so a keystroke never swaps the
+     fragment mid-type - which would collapse the panel and dismiss the keyboard. `change` also
+     covers every other field (blur, bubbles). #}
+  hx-trigger="change, search from:#filter-search, keyup[window.matchMedia('(min-width:1024px)').matches] changed delay:500ms from:#filter-search"
+  class="hidden peer-checked:flex lg:flex flex-wrap gap-3 items-end mt-2"
 >
   {# Carries the current sort so a filter change doesn't reset it back to newest-first; the
      sort toggle link below is the only thing that changes this value. #}
@@ -33,7 +54,7 @@
 
   <div class="grow min-w-[12rem]">
     {{ input(
-      "q", label="Search", value=filters.q, placeholder="Search all fields...",
+      "q", label="Search", type="search", value=filters.q, placeholder="Search all fields...",
       id="filter-search", class_="w-full"
     ) }}
   </div>

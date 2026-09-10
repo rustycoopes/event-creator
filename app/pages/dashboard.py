@@ -130,6 +130,13 @@ async def dashboard_page(
     has_active_filters = bool(
         type or parsed_date_from or parsed_date_to or q or show_reviewed or event_types
     )
+    # The "Filters (N)" mobile-disclosure badge (mobile-responsive-tables Slice 1b). Deliberately
+    # NOT has_active_filters: that folds in `event_types` (true whenever the user has any events)
+    # and would show a phantom count on an unfiltered page. See
+    # docs/adr/mobile-responsive-tables-filter-disclosure.md in organize-me.
+    active_filter_count = sum(
+        1 for f in (type, parsed_date_from, parsed_date_to, q, show_reviewed) if f
+    )
     is_htmx_request = request.headers.get("hx-request") == "true"
     # Only the full-page template renders the Import pending files button - skip the extra query
     # on every HTMX filter/sort/pagination request, which never re-renders it.
@@ -151,6 +158,7 @@ async def dashboard_page(
         # template to avoid a Jinja list.append() loop-scoping workaround.
         "type_options": [("", "All types")] + [(t, t) for t in event_types],
         "has_active_filters": has_active_filters,
+        "active_filter_count": active_filter_count,
         "filters": {
             "type": type or "",
             "date_from": parsed_date_from.isoformat() if parsed_date_from else "",

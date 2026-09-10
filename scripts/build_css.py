@@ -18,6 +18,7 @@ import sys
 from pathlib import Path
 
 from organizeme_chrome.paths import (
+    chrome_components_css_path,
     chrome_fonts_dir,
     chrome_package_dir,
     chrome_templates_dir,
@@ -72,6 +73,11 @@ def _write_entry_css() -> None:
             # installed dependency inside a gitignored .venv.
             *_source_lines(chrome_package_dir() / "design", ".py"),
             f'@import "{chrome_tokens_css_path().as_posix()}";',
+            # Unlayered import (bare, after tokens.css), so its raw rules sit outside every
+            # @layer and win against @layer utilities regardless of specificity - the
+            # .om-stacked-table card layout resets per-cell utilities (truncate, max-w-xs, w-10)
+            # below lg. See docs/adr/mobile-responsive-tables-css-delivery.md in organize-me.
+            f'@import "{chrome_components_css_path().as_posix()}";',
         ]
     )
     GENERATED_ENTRY.write_text(entry + "\n")
