@@ -3,17 +3,16 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * Playwright config for the Event Creator E2E suite (Slice R13).
  *
- * These tests drive the REAL deployed QA app end-to-end - there is no local web server started
- * here. `PLAYWRIGHT_BASE_URL` must point at the shared Load Balancer's custom domain (set in CI
- * after `deploy-qa` succeeds), not Event Creator's own Cloud Run URL directly - relative
- * `hx-get`/fetch calls (e.g. Settings' Storage/Notifications fragments, R7) resolve against
- * whatever origin the page was loaded from, and only the LB's URL map
- * (infra/gcp_lb/generate_url_map.py) knows how to route those paths to Event Creator's own Cloud
- * Run service. Hitting Event Creator's own Cloud Run URL directly bypasses that routing entirely.
- * Falls back to the known QA domain for convenient local runs.
+ * These tests drive a deployed app end-to-end - there is no local web server started here. They
+ * are NOT run in CI (the QA environment was dropped); run them locally, pointing
+ * `PLAYWRIGHT_BASE_URL` at a local proxy or prod. It must point at an origin whose URL map routes
+ * cross-service paths - relative `hx-get`/fetch calls (e.g. Settings' Storage/Notifications
+ * fragments, R7) resolve against whatever origin the page was loaded from, and only the shared
+ * Load Balancer's URL map (infra/gcp_lb/generate_url_map.py) knows how to route those paths to
+ * Event Creator's own Cloud Run service. Hitting a bare Cloud Run URL bypasses that routing.
  */
 const baseURL =
-  process.env.PLAYWRIGHT_BASE_URL ?? 'https://organizeme.qa.russcoopersoftware.com';
+  process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:8000';
 
 export default defineConfig({
   testDir: './tests',

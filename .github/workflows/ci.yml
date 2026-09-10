@@ -5,18 +5,19 @@ on:
     branches:
       - main
 
-env:
-  GCP_PROJECT_ID: gen-lang-client-0791944342
-  GCP_REGION: northamerica-northeast1
-  ARTIFACT_REGISTRY_REPO: event-creator
-  IMAGE_NAME: app
-
 jobs:
   test:
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: ${{ secrets.SUPABASE_QA_URL }}
-      JWT_SECRET: ${{ secrets.JWT_SECRET_QA }}
+      # The QA environment (its own Cloud Run + Supabase project + the deployed-QA Playwright
+      # jobs) was dropped for cost - mirrors organize-me's 2026-09-08 `refactor: drop QA
+      # environment from the pipeline`. event-creator's only migration is a no-op baseline (it
+      # adopts tables organize-me's schema-separation migration created), so there's no schema to
+      # stand up on a throwaway Postgres - the pytest/alembic run points at Supabase prod, exactly
+      # as deploy.yml's own `test` job already does on every merge to main. Tests roll every write
+      # back inside a SAVEPOINT (see tests/conftest.py), so nothing is persisted.
+      DATABASE_URL: ${{ secrets.SUPABASE_PROD_URL }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET_PROD }}
       # Slice R7 storage-connect OAuth tests build real consent URLs/exchange calls against fakes,
       # but assert the client_id/secret actually configured flows through - same secrets as
       # organize-me's own ci.yml (mirrors that repo's test job), reused here since these are the
@@ -24,14 +25,13 @@ jobs:
       # as an additional authorized callback in each app's console.
       GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
       GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
-      # Fixed per-environment value (issue #200), not a secret - must match what's registered on
-      # the Google OAuth client in Google Cloud Console.
-      GOOGLE_DRIVE_REDIRECT_URI: https://organizeme.qa.russcoopersoftware.com/api/v1/storage-config/google-drive/callback
+      # Fixed per-environment value (issue #200), not a secret. tests/conftest.py monkeypatches
+      # its own value for the redirect-URI assertions regardless - this is only here for parity
+      # with deploy.yml's test job.
+      GOOGLE_DRIVE_REDIRECT_URI: https://organizeme.russcoopersoftware.com/api/v1/storage-config/google-drive/callback
       DROPBOX_OAUTH_CLIENT_ID: ${{ secrets.DROPBOX_OAUTH_CLIENT_ID }}
       DROPBOX_OAUTH_CLIENT_SECRET: ${{ secrets.DROPBOX_OAUTH_CLIENT_SECRET }}
-      # Fixed per-environment value (issue #201), not a secret - must match what's registered on
-      # the Dropbox app in the Dropbox App Console.
-      DROPBOX_OAUTH_REDIRECT_URI: https://organizeme.qa.russcoopersoftware.com/api/v1/storage-config/dropbox/callback
+      DROPBOX_OAUTH_REDIRECT_URI: https://organizeme.russcoopersoftware.com/api/v1/storage-config/dropbox/callback
       # Storage-credential encryption key. Tests inject their own throwaway keys regardless, so
       # this has no effect on pass/fail - set for parity with organize-me's own ci.yml.
       ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
@@ -70,7 +70,7 @@ jobs:
       - name: Verify compiled CSS is non-empty and contains the canary utility class
         run: uv run python scripts/verify_css_build.py
 
-      - name: Run Alembic migrations (Supabase QA, event_creator schema)
+      - name: Run Alembic migrations
         run: uv run alembic upgrade head
 
       - name: Run pytest
@@ -78,220 +78,3 @@ jobs:
 
       - name: Run mypy
         run: uv run mypy app tests
-
-  deploy-qa:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Authenticate to GCP
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
-
-      # Registry-decoupling (organize-me#218): the Host's own Cloud Run URL, looked up live
-      # (rather than hardcoded) since it's known in advance - the Host already exists in this
-      # environment before this migration deploys - but its exact *.run.app suffix isn't worth
-      # duplicating as a literal anywhere. Not a self-referential capture (this describes a
-      # *different*, already-deployed service), so no follow-up-update step is needed the way
-      # PIPELINE_ENDPOINT_URL below needs one for this service's own URL.
-      - name: Look up the Host's (organize-me) Cloud Run URL
-        id: registry_host
-        run: |
-          HOST_URL=$(gcloud run services describe organizeme-qa \
-            --region=${{ env.GCP_REGION }} --project=${{ env.GCP_PROJECT_ID }} \
-            --format='value(status.url)')
-          echo "url=${HOST_URL}" >> "$GITHUB_OUTPUT"
-
-      # JWT_SECRET, ENCRYPTION_KEY, and the two OAuth client *secrets* are intentionally absent
-      # here: all four are wired below via --set-secrets from GCP Secret Manager (`jwt-secret-qa`,
-      # `encryption-key-qa` shared with the Host per R4/R6; `google-oauth-client-secret-qa`/
-      # `dropbox-oauth-client-secret-qa` new to this service - client secrets/connection strings
-      # don't belong in a plaintext env-vars-file readable via `gcloud run services describe`,
-      # unlike the client *ids* below, which aren't confidential).
-      #
-      # GCP_PROJECT_ID/CLOUD_TASKS_LOCATION/CLOUD_TASKS_QUEUE/PIPELINE_INVOKER_SERVICE_ACCOUNT
-      # (Slice R11 redesign, replacing REDIS_URL/Celery) are plaintext, non-sensitive config, same
-      # treatment as the other env vars below - see docs/adr/0001 in organize-me.
-      # PIPELINE_ENDPOINT_URL is deliberately NOT written here - it's this service's own Cloud Run
-      # URL, only known after the first deploy below, and is set via a follow-up
-      # `gcloud run services update` once that URL is captured.
-      #
-      # NOTE: E2E_TEST_MODE=true is written here for QA ONLY (mirrors organize-me's own ci.yml).
-      # It makes `is_storage_connected`/`get_import_storage` (app/api/v1/storage_config.py,
-      # import_pending_files.py) treat every user as having a connected storage provider, so E2E
-      # (which never does real Drive/Dropbox OAuth, per organize-me's standing #23 decision) can
-      # exercise the "Import pending files" button - see issue #185. It must never appear in
-      # deploy.yml's prod env vars.
-      - name: Write Cloud Run env vars file
-        env:
-          DATABASE_URL: ${{ secrets.SUPABASE_QA_URL }}
-          GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.GOOGLE_OAUTH_CLIENT_ID }}
-          DROPBOX_OAUTH_CLIENT_ID: ${{ secrets.DROPBOX_OAUTH_CLIENT_ID }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
-          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
-          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
-          TWILIO_PHONE_NUMBER: ${{ secrets.TWILIO_PHONE_NUMBER }}
-          REGISTRY_HOST_URL: ${{ steps.registry_host.outputs.url }}
-        run: |
-          cat > /tmp/cloud-run-env.yaml <<EOF
-          DATABASE_URL: "${DATABASE_URL}"
-          GOOGLE_OAUTH_CLIENT_ID: "${GOOGLE_OAUTH_CLIENT_ID}"
-          GOOGLE_DRIVE_REDIRECT_URI: "https://organizeme.qa.russcoopersoftware.com/api/v1/storage-config/google-drive/callback"
-          BASE_URL: "https://organizeme.qa.russcoopersoftware.com"
-          DROPBOX_OAUTH_CLIENT_ID: "${DROPBOX_OAUTH_CLIENT_ID}"
-          DROPBOX_OAUTH_REDIRECT_URI: "https://organizeme.qa.russcoopersoftware.com/api/v1/storage-config/dropbox/callback"
-          GEMINI_API_KEY: "${GEMINI_API_KEY}"
-          RESEND_API_KEY: "${RESEND_API_KEY}"
-          TWILIO_ACCOUNT_SID: "${TWILIO_ACCOUNT_SID}"
-          TWILIO_AUTH_TOKEN: "${TWILIO_AUTH_TOKEN}"
-          TWILIO_PHONE_NUMBER: "${TWILIO_PHONE_NUMBER}"
-          E2E_TEST_MODE: "true"
-          REGISTRY_HOST_URL: "${REGISTRY_HOST_URL}"
-          GCP_PROJECT_ID: "${{ env.GCP_PROJECT_ID }}"
-          CLOUD_TASKS_LOCATION: "${{ env.GCP_REGION }}"
-          CLOUD_TASKS_QUEUE: "event-creator-pipeline-qa"
-          PIPELINE_INVOKER_SERVICE_ACCOUNT: "170051512639-compute@developer.gserviceaccount.com"
-          EOF
-
-      - name: Build image
-        run: |
-          docker build \
-            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            -t ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/${{ env.IMAGE_NAME }}:latest \
-            .
-
-      - name: Push image
-        run: |
-          docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-          docker push ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/${{ env.IMAGE_NAME }}:latest
-
-      - name: Deploy to Cloud Run QA
-        run: |
-          # --timeout=3600 (Cloud Run's max): the live SSE processing-progress stream
-          # (GET /api/v1/processing-runs/{id}/sse, Slice R8) is a long-held request for the life
-          # of a run - the default ~300s timeout would cut it off mid-stream on a slow run.
-          #
-          # No --no-cpu-throttling here (Slice R11 redesign): the ADR's experimental flag on QA
-          # is being reverted as part of this change - Cloud Tasks push dispatch means nothing on
-          # this service needs CPU-always-allocated anymore. See docs/adr/0001 in organize-me.
-          gcloud run deploy event-creator-qa \
-            --image=${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPO }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
-            --region=${{ env.GCP_REGION }} \
-            --project=${{ env.GCP_PROJECT_ID }} \
-            --env-vars-file=/tmp/cloud-run-env.yaml \
-            --set-secrets=JWT_SECRET=jwt-secret-qa:latest,ENCRYPTION_KEY=encryption-key-qa:latest,GOOGLE_OAUTH_CLIENT_SECRET=google-oauth-client-secret-qa:latest,DROPBOX_OAUTH_CLIENT_SECRET=dropbox-oauth-client-secret-qa:latest \
-            --allow-unauthenticated \
-            --timeout=3600 \
-            --cpu-throttling \
-            --quiet
-
-      # Cloud Tasks pushes directly to this service's own https://*.run.app URL (Slice R11
-      # redesign) - that URL isn't known until after the deploy above, so PIPELINE_ENDPOINT_URL
-      # is set in a follow-up update rather than the main env-vars-file. Idempotent/cheap: just
-      # updates one env var on the revision that was already deployed, no rebuild.
-      - name: Wire this service's own URL for Cloud Tasks push targets
-        run: |
-          SERVICE_URL=$(gcloud run services describe event-creator-qa \
-            --region=${{ env.GCP_REGION }} --project=${{ env.GCP_PROJECT_ID }} \
-            --format='value(status.url)')
-          gcloud run services update event-creator-qa \
-            --region=${{ env.GCP_REGION }} --project=${{ env.GCP_PROJECT_ID }} \
-            --update-env-vars=PIPELINE_ENDPOINT_URL="${SERVICE_URL}" \
-            --quiet
-
-  e2e-boundary-qa:
-    # Slice R10 (#165): the P0 Host<->Event Creator boundary suite, owned by organize-me's e2e/
-    # directory (it drives the shared LB domain, not just this service) but run from here too so
-    # a change to this repo that breaks the boundary is caught by its own CI, not only the Host's.
-    # Checks out organize-me at its own `main` (not this PR's SHA - there is no cross-repo PR
-    # concept here) and runs only the boundary spec, not organize-me's full UX suite.
-    needs: deploy-qa
-    runs-on: ubuntu-latest
-    env:
-      PLAYWRIGHT_BASE_URL: https://organizeme.qa.russcoopersoftware.com
-    defaults:
-      run:
-        working-directory: host-e2e/e2e
-    steps:
-      - name: Checkout organize-me's e2e suite
-        uses: actions/checkout@v4
-        with:
-          repository: rustycoopes/organize-me
-          path: host-e2e
-
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: host-e2e/e2e/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
-      - name: Run Host<->Event Creator boundary E2E suite against QA
-        run: npx playwright test host-event-creator-boundary.spec.ts
-
-      - name: Upload Playwright report
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: host-e2e/e2e/playwright-report/
-
-  e2e-qa:
-    # Slice R13: Event Creator's own upload/processing/storage/prompt/logs/dashboard/
-    # import-pending-files flows, ported from organize-me's e2e/ suite (where they didn't belong -
-    # a Host-only change couldn't validate Event Creator's flows, and vice versa). Runs against
-    # the shared LB's QA domain, same as e2e-boundary-qa above, since these routes are served
-    # behind the same Load Balancer as the Host.
-    needs: deploy-qa
-    runs-on: ubuntu-latest
-    env:
-      # The shared Load Balancer's QA custom domain, not this service's own Cloud Run URL directly
-      # - see e2e/playwright.config.ts's docstring for why (cross-service routing requires the
-      # LB's URL-map, which the bare Cloud Run URL bypasses entirely).
-      PLAYWRIGHT_BASE_URL: https://organizeme.qa.russcoopersoftware.com
-    defaults:
-      run:
-        working-directory: e2e
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: npm
-          cache-dependency-path: e2e/package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
-
-      - name: Run Playwright E2E tests against QA
-        run: npx playwright test
-
-      - name: Upload Playwright report
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report
-          path: e2e/playwright-report/
-          retention-days: 7
