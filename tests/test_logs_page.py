@@ -661,3 +661,24 @@ async def test_logs_filters_badge_counts_only_active_filter_fields(
 
     filtered = await client.get("/logs", params={"status": "success"}, cookies=cookies)
     assert "Filters (1)" in filtered.text
+
+
+async def test_logs_filter_form_carries_a_sort_control(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """Below lg the grid's <thead> sort links are hidden by .om-stacked-table, so the filter
+    form carries its own sort_by/sort_dir <select>s (also the sort carrier for filter changes)."""
+    user_id = await create_host_user(db_session)
+    cookies = {"organizeme_auth": make_token.valid(sub=str(user_id))}
+    await _make_run(db_session, user_id)
+
+    response = await client.get(
+        "/logs", params={"sort_by": "filename", "sort_dir": "asc"}, cookies=cookies
+    )
+
+    body = response.text
+    assert 'id="mobile-sort-by"' in body
+    assert 'id="mobile-sort-dir"' in body
+    # The current sort round-trips into the selects.
+    assert '<option value="filename" selected>' in body
+    assert '<option value="asc" selected>' in body

@@ -109,6 +109,12 @@ test.describe('Logs (processing history) — mobile viewport', () => {
     await page.getByText('Filters (0)').click();
     await expect(filterForm).toBeVisible();
 
+    // Below lg the grid's <thead> sort links are visually hidden by .om-stacked-table, so the
+    // sort control lives in the disclosure panel instead - it must be reachable and it re-sorts.
+    await expect(page.locator('#mobile-sort-by')).toBeVisible();
+    await page.locator('#mobile-sort-by').selectOption('filename');
+    await expect(page).toHaveURL(/sort_by=filename/);
+
     // The count re-renders with the fragment on every swap.
     await page.locator('#filter-status').selectOption('success');
     await expect(page).toHaveURL(/status=success/);

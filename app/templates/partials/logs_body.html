@@ -35,10 +35,23 @@
   hx-trigger="change"
   class="hidden peer-checked:flex lg:flex flex-wrap gap-2 items-end mt-2"
 >
-  {# Carries the current sort so a filter change doesn't reset it back to newest-first; the
-     column-header sort links below are the only thing that changes these values. #}
-  <input type="hidden" name="sort_by" value="{{ filters.sort_by }}" />
-  <input type="hidden" name="sort_dir" value="{{ filters.sort_dir }}" />
+  {# Sort control. Carries the current sort so a filter change doesn't reset it, AND - below lg,
+     where .om-stacked-table visually hides the grid's <thead> - it's the only reachable sort UI
+     (the column-header links are the desktop control). The wrapper is `lg:hidden`, i.e.
+     display:none at lg+, but its <select>s still serialize with the form there, so a desktop
+     filter change preserves the current sort exactly as the old hidden inputs did. #}
+  <div class="lg:hidden flex flex-wrap gap-2 items-end">
+    {{ select(
+      "sort_by", label="Sort by",
+      options=[("date", "Date"), ("filename", "Filename"), ("status", "Status")],
+      value=filters.sort_by, id="mobile-sort-by"
+    ) }}
+    {{ select(
+      "sort_dir", label="Order",
+      options=[("desc", "Descending"), ("asc", "Ascending")],
+      value=filters.sort_dir, id="mobile-sort-dir"
+    ) }}
+  </div>
 
   {# Jinja expressions have no list-comprehension syntax (unlike Python) - build the
      (value, label) pairs select() expects via a namespace accumulator instead. #}

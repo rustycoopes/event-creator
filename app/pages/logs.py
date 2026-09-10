@@ -137,13 +137,13 @@ async def logs_page(
             sort_dir=_toggle_sort_dir(active_column=sort_by, active_dir=sort_dir, column=column),
         )
 
-    has_active_filters = bool(run_status or parsed_date_from or parsed_date_to)
-    # Explicit count for the mobile "Filters (N)" disclosure badge (mobile-responsive-tables
-    # Slice 2). Logs' has_active_filters is already a faithful predicate (no event_types term
-    # like the Dashboard's), but the button needs the number, not a bool.
+    # Count of active filter fields - drives both the empty-state predicate and the mobile
+    # "Filters (N)" disclosure badge (mobile-responsive-tables Slice 2). Unlike the Dashboard,
+    # Logs has no event_types-style term, so the bool is just `count > 0` (no separate predicate).
     active_filter_count = sum(
         1 for f in (run_status, parsed_date_from, parsed_date_to) if f
     )
+    has_active_filters = active_filter_count > 0
     host_user = await get_host_user(db, user_id)
     context = {
         "dark_mode": host_user.dark_mode if host_user is not None else False,
