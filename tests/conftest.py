@@ -46,10 +46,11 @@ def _reconfigure_registry_source_between_tests() -> Iterator[None]:
 @pytest.fixture(autouse=True)
 def _env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("JWT_SECRET", JWT_SECRET)
-    # Real value only if the environment already provides one (CI sets this to the Supabase QA
-    # URL - see .github/workflows/ci.yml); tests that never touch the DB (test_health.py,
-    # test_dashboard_auth.py) work fine with this placeholder, but anything using the db_session
-    # fixture below needs a real, reachable Postgres.
+    # Real value only if the environment already provides one (both ci.yml and deploy.yml point
+    # this at Supabase prod - event-creator's baseline migration is a no-op, so there's no schema
+    # to stand up on a throwaway Postgres; test writes roll back inside a SAVEPOINT regardless).
+    # Tests that never touch the DB (test_health.py, test_dashboard_auth.py) work fine with this
+    # placeholder, but anything using the db_session fixture below needs a real, reachable Postgres.
     monkeypatch.setenv(
         "DATABASE_URL",
         __import__("os").environ.get("DATABASE_URL", "postgresql://user:pass@localhost/testdb"),
@@ -120,9 +121,9 @@ class TokenFactory:
 async def db_session() -> AsyncIterator[AsyncSession]:
     """A DB session whose writes are rolled back at teardown (mirrors organize-me's own fixture).
 
-    Requires a real, reachable DATABASE_URL (the Supabase QA database in CI - see
-    .github/workflows/ci.yml) - there is no local Docker Postgres in this project's dev
-    convention. Builds its own dedicated engine per test (rather than reusing
+    Requires a real, reachable DATABASE_URL (Supabase prod in CI - both ci.yml and deploy.yml,
+    see the `_env` fixture above for why) - there is no local Docker Postgres in this project's
+    dev convention. Builds its own dedicated engine per test (rather than reusing
     app.db.session's process-wide singleton) because asyncpg connections are bound to the event
     loop that created them, and pytest-asyncio gives each test function its own loop by default.
     """

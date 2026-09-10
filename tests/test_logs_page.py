@@ -627,3 +627,58 @@ async def test_logs_page_out_of_range_page_redirect_preserves_filters(
 
     assert response.status_code in (302, 303, 307)
     assert response.headers["location"] == "/logs?status=success&page=1"
+
+
+# --- Mobile-responsive tables Slice 2 (#50): stacked-card layout + filter disclosure ---
+
+
+async def test_logs_grid_uses_the_stacked_table_card_pattern(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """The runs grid adopts organizeme_chrome's `.om-stacked-table` (flips to labelled cards
+    below lg) - every <td> needs a data-label."""
+    user_id = await create_host_user(db_session)
+    cookies = {"organizeme_auth": make_token.valid(sub=str(user_id))}
+    await _make_run(db_session, user_id, filename="chat.txt")
+
+    response = await client.get("/logs", cookies=cookies)
+
+    assert "om-stacked-table" in response.text
+    assert 'data-label="Filename"' in response.text
+    assert 'data-label="Details"' in response.text
+
+
+async def test_logs_filters_badge_counts_only_active_filter_fields(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """The mobile "Filters (N)" disclosure badge shows the count of active filter fields."""
+    user_id = await create_host_user(db_session)
+    cookies = {"organizeme_auth": make_token.valid(sub=str(user_id))}
+    await _make_run(db_session, user_id, status=ProcessingRunStatus.SUCCESS)
+
+    unfiltered = await client.get("/logs", cookies=cookies)
+    assert "Filters (0)" in unfiltered.text
+
+    filtered = await client.get("/logs", params={"status": "success"}, cookies=cookies)
+    assert "Filters (1)" in filtered.text
+
+
+async def test_logs_filter_form_carries_a_sort_control(
+    client: AsyncClient, db_session: AsyncSession, make_token: type[TokenFactory]
+) -> None:
+    """Below lg the grid's <thead> sort links are hidden by .om-stacked-table, so the filter
+    form carries its own sort_by/sort_dir <select>s (also the sort carrier for filter changes)."""
+    user_id = await create_host_user(db_session)
+    cookies = {"organizeme_auth": make_token.valid(sub=str(user_id))}
+    await _make_run(db_session, user_id)
+
+    response = await client.get(
+        "/logs", params={"sort_by": "filename", "sort_dir": "asc"}, cookies=cookies
+    )
+
+    body = response.text
+    assert 'id="mobile-sort-by"' in body
+    assert 'id="mobile-sort-dir"' in body
+    # The current sort round-trips into the selects.
+    assert '<option value="filename" selected>' in body
+    assert '<option value="asc" selected>' in body
